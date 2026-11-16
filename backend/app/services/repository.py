@@ -4,14 +4,14 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 import re
 import uuid
 
 from app.models.api import GraphExportPackage, ObsidianExportOptions, ObsidianGraphExportPackage
-from app.models.domain import Artifact, ChatMessage, CreateGraphRequest, Edge, GraphChatThread, GraphProposal, GraphSummary, PatchOperation, QuizAttempt, ResourceLink, TopicQuizSession, SnapshotRecord, StudyGraph, Topic, UpdateWorkspaceConfigRequest, WorkspaceDocument, WorkspaceEnvelope, Zone
+from app.models.domain import Artifact, ChatMessage, CreateGraphRequest, Edge, GraphChatThread, GraphProposal, GraphSummary, PatchOperation, QuizAttempt, ResourceLink, TopicQuizSession, SnapshotRecord, StudyGraph, Topic, TopicReviewState, UpdateWorkspaceConfigRequest, WorkspaceDocument, WorkspaceEnvelope, Zone
 from app.services.obsidian_export import build_obsidian_export_package
 from app.services.repository_config import apply_workspace_config_update
 from app.services.proposal_validator import prerequisites_are_acyclic
@@ -614,6 +614,7 @@ class GraphRepository:
         if not include_progress:
             for topic in graph.topics:
                 topic.state = "not_started"
+                topic.review = TopicReviewState()
             graph.quiz_attempts = []
         return GraphExportPackage(
             exported_at=datetime.now(timezone.utc).isoformat(),
@@ -636,6 +637,7 @@ class GraphRepository:
         if not include_progress:
             for topic in graph.topics:
                 topic.state = "not_started"
+                topic.review = TopicReviewState()
             graph.quiz_attempts = []
         return build_obsidian_export_package(
             graph,
@@ -677,6 +679,7 @@ class GraphRepository:
         if not include_progress:
             for topic in graph.topics:
                 topic.state = "not_started"
+                topic.review = TopicReviewState()
             graph.quiz_attempts = []
         graph.metadata = {
             **graph.metadata,
@@ -812,6 +815,36 @@ class GraphRepository:
                 reason=f"delete resource from {topic.title}",
                 parent_snapshot_id=current.snapshot.id,
             )
+        return self.snapshot(snapshot_id)
+
+    def record_topic_review(self, graph_id: str, topic_id: str, rating: str) -> WorkspaceEnvelope:
+        current = self.current()
+        workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
+        graph = next((item for item in workspace.graphs if item.graph_id == graph_id), None)
+        if graph is None:
+            raise ValueError(f"graph {graph_id} not found")
+        topic = next((item for item in graph.topics if item.id == topic_id), None)
+        if topic is None:
+            raise ValueError(f"topic {topic_id} not found")
+        if not topic.description.strip():
+            raise ValueError("This topic needs a description before it can be reviewed")
+        if rating == "again":
+            interval_days, streak = 1, 0
+        elif rating == "hard":
+            interval_days, streak = max(2, min(topic.review.interval_days, 3)), 0
+        elif rating == "remembered":
+            streak = topic.review.streak + 1
+            interval_days = min(30, [3, 7, 14, 30][min(streak - 1, 3)])
+        else:
+            raise ValueError("invalid review rating")
+        now = datetime.now(timezone.utc)
+        topic.review.last_reviewed_at = now
+        topic.review.due_at = now + timedelta(days=interval_days)
+        topic.review.interval_days = interval_days
+        topic.review.streak = streak
+        topic.review.last_rating = rating
+        with self._connect() as conn:
+            snapshot_id = self._insert_snapshot(conn, workspace, source="topic.review", reason=f"review {topic.title}", parent_snapshot_id=current.snapshot.id)
         return self.snapshot(snapshot_id)
 
     def append_topic_artifact(self, graph_id: str, topic_id: str, artifact: Artifact) -> WorkspaceEnvelope:

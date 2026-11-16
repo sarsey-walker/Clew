@@ -1064,6 +1064,18 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     await loadSnapshots();
   }
 
+  async function recordTopicReview(topicId: string, rating: "again" | "hard" | "remembered"): Promise<void> {
+    if (!activeGraph) return;
+    const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rating }),
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, copy.topic.reviewError));
+    setData((await response.json()) as WorkspaceEnvelope);
+    await loadSnapshots();
+  }
+
   async function addTopicArtifact(topicId: string, title: string, body: string): Promise<void> {
     if (!activeGraph) return;
     const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/artifacts`, {
@@ -1357,6 +1369,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           addTopicResource,
           updateTopicResource,
           deleteTopicResource,
+          recordTopicReview,
           addTopicArtifact,
           selectedTopic,
           selectedTopicAnchor,

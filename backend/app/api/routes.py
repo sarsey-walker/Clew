@@ -26,7 +26,7 @@ from app.api.route_helpers import (
     workspace_config_payload as _workspace_config_payload,
 )
 from app.core.config import Settings, get_settings
-from app.models.api import GraphExportRequest, GraphImportRequest, GraphLayoutPositionRequest, RenameGraphRequest, TopicArtifactInput, TopicResourceInput, UpdateGraphLayoutRequest, UpdateTopicResourceInput
+from app.models.api import GraphExportRequest, GraphImportRequest, GraphLayoutPositionRequest, RenameGraphRequest, TopicArtifactInput, TopicResourceInput, TopicReviewInput, UpdateGraphLayoutRequest, UpdateTopicResourceInput
 from app.models.domain import Artifact, CreateGraphRequest, GraphProposalEnvelope, QuizStartRequest, QuizStartResponse, QuizSubmitRequest, QuizSubmitResponse, ResourceLink, UpdateWorkspaceConfigRequest
 from app.services.debug_log_service import DebugClientLogRequest, get_debug_log_service
 from app.services.proposal_normalizer import ProposalNormalizer
@@ -241,6 +241,22 @@ def delete_topic_resource(
         message = str(exc)
         status_code = 404 if "not found" in message else 400
         raise HTTPException(status_code=status_code, detail=message) from exc
+    return _workspace_config_payload(workspace, settings)
+
+
+@router.post("/api/v1/workspace/graphs/{graph_id}/topics/{topic_id}/review")
+def record_topic_review(
+    graph_id: str,
+    topic_id: str,
+    body: TopicReviewInput,
+    repository: GraphRepository = Depends(get_repository),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    try:
+        workspace = repository.record_topic_review(graph_id, topic_id, body.rating)
+    except ValueError as exc:
+        message = str(exc)
+        raise HTTPException(status_code=404 if "not found" in message else 400, detail=message) from exc
     return _workspace_config_payload(workspace, settings)
 
 

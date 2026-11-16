@@ -31,6 +31,7 @@ import { AssistantThread } from "./assistant/AssistantThread";
 import { TopStatsOverlay } from "./TopStatsOverlay";
 import { ClewLogo } from "./ClewLogo";
 import { TopicResourcesSection } from "./TopicResourcesSection";
+import { TopicReviewDialog } from "./TopicReviewDialog";
 import type { GraphViewMode } from "./WorkspaceShellOverlayControls";
 import type {
   Artifact,
@@ -183,6 +184,7 @@ type TopicDetailsProps = {
   addTopicResource: (topicId: string, label: string, url: string) => Promise<void>;
   updateTopicResource: (topicId: string, resourceId: string, label: string, url: string) => Promise<void>;
   deleteTopicResource: (topicId: string, resourceId: string) => Promise<void>;
+  recordTopicReview: (topicId: string, rating: "again" | "hard" | "remembered") => Promise<void>;
   addTopicArtifact: (topicId: string, title: string, body: string) => Promise<void>;
   selectedTopic: Topic | null;
   selectedTopicAnchor: TopicAnchorPoint | null;
@@ -336,6 +338,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     addTopicResource,
     updateTopicResource,
     deleteTopicResource,
+    recordTopicReview,
     addTopicArtifact,
     selectedTopic,
     selectedTopicAnchor,
@@ -456,6 +459,12 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const [resourceDeleteTarget, setResourceDeleteTarget] = React.useState<ResourceLink | null>(null);
   const [resourceDeleteError, setResourceDeleteError] = React.useState<string | null>(null);
   const [resourceDeleting, setResourceDeleting] = React.useState(false);
+  const [reviewOpen, setReviewOpen] = React.useState(false);
+  const [reviewAnswer, setReviewAnswer] = React.useState("");
+  const [reviewRevealed, setReviewRevealed] = React.useState(false);
+  const [reviewSaving, setReviewSaving] = React.useState(false);
+  const [reviewError, setReviewError] = React.useState<string | null>(null);
+  const reviewModalRef = React.useRef<HTMLDivElement | null>(null);
   const topicAssetModalRef = React.useRef<HTMLDivElement | null>(null);
   const topicAssetPrimaryInputRef = React.useRef<HTMLElement | null>(null);
   // Prevent repeated pointer events from creating duplicate topic chat sessions.
@@ -469,6 +478,13 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     setTopicArtifactTitleDraft("");
     setTopicArtifactBodyDraft("");
   }, []);
+  const closeReviewModal = React.useCallback(() => {
+    setReviewOpen(false);
+    setReviewAnswer("");
+    setReviewRevealed(false);
+    setReviewError(null);
+  }, []);
+  useModalAccessibility({ isOpen: reviewOpen, modalRef: reviewModalRef, onClose: closeReviewModal });
   useModalAccessibility({
     isOpen: Boolean(topicAssetDialog),
     modalRef: topicAssetModalRef,
@@ -477,9 +493,10 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   });
   React.useEffect(() => {
     closeTopicAssetModal();
+    closeReviewModal();
     setResourceDeleteTarget(null);
     setResourceDeleteError(null);
-  }, [closeTopicAssetModal, selectedTopic?.id]);
+  }, [closeTopicAssetModal, closeReviewModal, selectedTopic?.id]);
 
   const beginFloatingDrag = React.useCallback((target: FloatingWindowDragTarget, event: React.PointerEvent<HTMLElement>) => {
     if (!experimentalLightDesktop) return;
@@ -809,6 +826,20 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
       setResourceDeleteError(deleteError instanceof Error ? deleteError.message : copy.topic.deleteResource);
     } finally {
       setResourceDeleting(false);
+    }
+  }
+
+  async function submitTopicReview(rating: "again" | "hard" | "remembered"): Promise<void> {
+    if (!selectedTopic || !reviewRevealed) return;
+    setReviewSaving(true);
+    setReviewError(null);
+    try {
+      await recordTopicReview(selectedTopic.id, rating);
+      closeReviewModal();
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : copy.topic.reviewError);
+    } finally {
+      setReviewSaving(false);
     }
   }
 
@@ -1444,6 +1475,12 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                         <div className="topicPopoverEmpty">{copy.topic.noArtifacts}</div>
                       )}
                     </div>
+                    <div className="topicPopoverSection">
+                      <div className="topicPopoverLabel">{copy.topic.review}</div>
+                      {selectedTopic.review?.due_at ? <div className="topicPopoverCopy">{copy.topic.reviewDue(new Date(selectedTopic.review.due_at).toLocaleDateString())}</div> : null}
+                      {!selectedTopic.description.trim() ? <div className="topicPopoverEmpty">{copy.topic.reviewUnavailable}</div> : null}
+                      <button className="topicPopoverPrimary" type="button" disabled={!selectedTopic.description.trim()} onClick={() => setReviewOpen(true)}>{copy.topic.review}</button>
+                    </div>
                     {selectedClosureStatus ? (
                       <div className="topicPopoverSection topicPopoverClosure">
                         <div className="topicPopoverLabel">{copy.topic.closure}</div>
@@ -1697,6 +1734,20 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
           submitTopicAssetDialog={submitTopicAssetDialog}
         />
       ) : null}
+      <TopicReviewDialog
+        topic={selectedTopic}
+        open={reviewOpen}
+        modalRef={reviewModalRef}
+        copy={copy}
+        answer={reviewAnswer}
+        setAnswer={setReviewAnswer}
+        revealed={reviewRevealed}
+        reveal={() => setReviewRevealed(true)}
+        saving={reviewSaving}
+        error={reviewError}
+        close={closeReviewModal}
+        rate={(rating) => void submitTopicReview(rating)}
+      />
     </>
   );
 }

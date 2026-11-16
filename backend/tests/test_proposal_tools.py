@@ -239,6 +239,31 @@ class ProposalToolTests(unittest.TestCase):
         restored = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics").resources[-1]
         self.assertEqual((restored.label, restored.url), ("My notes", "https://example.org/notes"))
 
+    def test_review_schedules_next_visit_without_changing_completion(self):
+        topic = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics")
+        before_state = topic.state
+        before_snapshot = self.repo.current().snapshot.id
+        url = f"/api/v1/workspace/graphs/{self.graph_id}/topics/arithmetics/review"
+        response = self.client.post(url, json={"rating": "remembered"})
+        self.assertEqual(response.status_code, 200, response.text)
+        reviewed = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics")
+        self.assertEqual(reviewed.state, before_state)
+        self.assertEqual(reviewed.review.interval_days, 3)
+        self.assertEqual(reviewed.review.streak, 1)
+        self.assertIsNotNone(reviewed.review.due_at)
+        for rating, interval, streak in [("remembered", 7, 2), ("hard", 3, 0), ("again", 1, 0)]:
+            response = self.client.post(url, json={"rating": rating})
+            self.assertEqual(response.status_code, 200, response.text)
+            reviewed = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics")
+            self.assertEqual((reviewed.review.interval_days, reviewed.review.streak), (interval, streak))
+            self.assertEqual(reviewed.state, before_state)
+        clean_package = self.repo.export_graph_package(self.graph_id, include_progress=False)
+        clean_topic = next(item for item in clean_package.graph.topics if item.id == "arithmetics")
+        self.assertIsNone(clean_topic.review.due_at)
+        self.repo.rollback_to(before_snapshot)
+        restored = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics")
+        self.assertIsNone(restored.review.due_at)
+
     def test_import_rejects_invalid_quiz_policy_before_awarding_state(self):
         package = self.repo.export_graph_package(self.graph_id).model_dump(mode="json")
         package["graph"]["topics"][0]["quiz_policy"]["pass_threshold"] = -1

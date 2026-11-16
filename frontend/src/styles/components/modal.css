@@ -105,6 +105,14 @@
   margin-right: auto;
 }
 
+.topicReviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
 .uiMono { font-family: var(--mono); overflow-wrap: anywhere; }
 
 .uiFieldPair {

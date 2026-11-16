@@ -34,6 +34,14 @@ class ResourceLink(BaseModel):
     kind: str = "reference"
 
 
+class TopicReviewState(BaseModel):
+    last_reviewed_at: datetime | None = None
+    due_at: datetime | None = None
+    interval_days: int = 0
+    streak: int = 0
+    last_rating: Literal["again", "hard", "remembered"] | None = None
+
+
 class Artifact(BaseModel):
     id: str
     title: str
@@ -192,6 +200,7 @@ class Topic(BaseModel):
     state: TopicState = "not_started"
     zones: list[str] = Field(default_factory=list)
     resources: list[ResourceLink] = Field(default_factory=list)
+    review: TopicReviewState = Field(default_factory=TopicReviewState)
     artifacts: list[Artifact] = Field(default_factory=list)
     quiz_policy: QuizPolicy = Field(default_factory=QuizPolicy)
     metadata: dict[str, Any] = Field(default_factory=dict)

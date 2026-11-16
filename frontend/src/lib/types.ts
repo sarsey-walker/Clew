@@ -32,6 +32,13 @@ export type Topic = {
   state: TopicState;
   zones: string[];
   resources: ResourceLink[];
+  review?: {
+    last_reviewed_at: string | null;
+    due_at: string | null;
+    interval_days: number;
+    streak: number;
+    last_rating: "again" | "hard" | "remembered" | null;
+  };
   artifacts: Artifact[];
   metadata?: Record<string, unknown>;
 };

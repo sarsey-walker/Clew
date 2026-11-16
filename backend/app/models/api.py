@@ -30,6 +30,10 @@ class UpdateTopicResourceInput(BaseModel):
     url: str = Field(min_length=1, max_length=4000)
 
 
+class TopicReviewInput(BaseModel):
+    rating: Literal["again", "hard", "remembered"]
+
+
 class TopicArtifactInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
     body: str = Field(min_length=1, max_length=12000)
