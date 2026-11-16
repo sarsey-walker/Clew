@@ -30,6 +30,7 @@ import { AssistantSessionList } from "./assistant/AssistantSessionList";
 import { AssistantThread } from "./assistant/AssistantThread";
 import { TopStatsOverlay } from "./TopStatsOverlay";
 import { ClewLogo } from "./ClewLogo";
+import { TopicResourcesSection } from "./TopicResourcesSection";
 import type { GraphViewMode } from "./WorkspaceShellOverlayControls";
 import type {
   Artifact,
@@ -179,7 +180,9 @@ type GraphWorkspaceProps = {
 };
 
 type TopicDetailsProps = {
-  addTopicResource: (topicId: string, url: string) => Promise<void>;
+  addTopicResource: (topicId: string, label: string, url: string) => Promise<void>;
+  updateTopicResource: (topicId: string, resourceId: string, label: string, url: string) => Promise<void>;
+  deleteTopicResource: (topicId: string, resourceId: string) => Promise<void>;
   addTopicArtifact: (topicId: string, title: string, body: string) => Promise<void>;
   selectedTopic: Topic | null;
   selectedTopicAnchor: TopicAnchorPoint | null;
@@ -331,6 +334,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   } = graphWorkspace;
   const {
     addTopicResource,
+    updateTopicResource,
+    deleteTopicResource,
     addTopicArtifact,
     selectedTopic,
     selectedTopicAnchor,
@@ -440,12 +445,17 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     kind: "resource" | "artifact";
     topicId: string;
     topicTitle: string;
+    resource: ResourceLink | null;
   } | null>(null);
   const [topicAssetSaving, setTopicAssetSaving] = React.useState(false);
   const [topicAssetError, setTopicAssetError] = React.useState<string | null>(null);
   const [topicResourceUrlDraft, setTopicResourceUrlDraft] = React.useState("");
+  const [topicResourceLabelDraft, setTopicResourceLabelDraft] = React.useState("");
   const [topicArtifactTitleDraft, setTopicArtifactTitleDraft] = React.useState("");
   const [topicArtifactBodyDraft, setTopicArtifactBodyDraft] = React.useState("");
+  const [resourceDeleteTarget, setResourceDeleteTarget] = React.useState<ResourceLink | null>(null);
+  const [resourceDeleteError, setResourceDeleteError] = React.useState<string | null>(null);
+  const [resourceDeleting, setResourceDeleting] = React.useState(false);
   const topicAssetModalRef = React.useRef<HTMLDivElement | null>(null);
   const topicAssetPrimaryInputRef = React.useRef<HTMLElement | null>(null);
   // Prevent repeated pointer events from creating duplicate topic chat sessions.
@@ -455,6 +465,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     setTopicAssetSaving(false);
     setTopicAssetError(null);
     setTopicResourceUrlDraft("");
+    setTopicResourceLabelDraft("");
     setTopicArtifactTitleDraft("");
     setTopicArtifactBodyDraft("");
   }, []);
@@ -466,6 +477,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   });
   React.useEffect(() => {
     closeTopicAssetModal();
+    setResourceDeleteTarget(null);
+    setResourceDeleteError(null);
   }, [closeTopicAssetModal, selectedTopic?.id]);
 
   const beginFloatingDrag = React.useCallback((target: FloatingWindowDragTarget, event: React.PointerEvent<HTMLElement>) => {
@@ -740,12 +753,22 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
 
   function openTopicAssetDialog(kind: "resource" | "artifact"): void {
     if (!selectedTopic) return;
-    setTopicAssetDialog({ kind, topicId: selectedTopic.id, topicTitle: selectedTopic.title });
+    setTopicAssetDialog({ kind, topicId: selectedTopic.id, topicTitle: selectedTopic.title, resource: null });
     setTopicAssetError(null);
     setTopicAssetSaving(false);
     setTopicResourceUrlDraft("");
+    setTopicResourceLabelDraft("");
     setTopicArtifactTitleDraft("");
     setTopicArtifactBodyDraft("");
+  }
+
+  function openTopicResourceEditDialog(resource: ResourceLink): void {
+    if (!selectedTopic) return;
+    setTopicAssetDialog({ kind: "resource", topicId: selectedTopic.id, topicTitle: selectedTopic.title, resource });
+    setTopicAssetError(null);
+    setTopicAssetSaving(false);
+    setTopicResourceUrlDraft(resource.url);
+    setTopicResourceLabelDraft(resource.label);
   }
 
   async function submitTopicAssetDialog(): Promise<void> {
@@ -758,7 +781,12 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
         if (!safeUrl) {
           throw new Error("A valid link is required.");
         }
-        await addTopicResource(topicAssetDialog.topicId, safeUrl);
+        if (topicAssetDialog.resource) {
+          if (!topicResourceLabelDraft.trim()) throw new Error(copy.dialogs.resourceLabelRequired);
+          await updateTopicResource(topicAssetDialog.topicId, topicAssetDialog.resource.id, topicResourceLabelDraft, safeUrl);
+        } else {
+          await addTopicResource(topicAssetDialog.topicId, topicResourceLabelDraft, safeUrl);
+        }
       } else {
         await addTopicArtifact(topicAssetDialog.topicId, topicArtifactTitleDraft, topicArtifactBodyDraft);
       }
@@ -767,6 +795,20 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
       setTopicAssetError(assetError instanceof Error ? assetError.message : copy.errors.updateConfig);
     } finally {
       setTopicAssetSaving(false);
+    }
+  }
+
+  async function confirmDeleteTopicResource(resource: ResourceLink): Promise<void> {
+    if (!selectedTopic) return;
+    setResourceDeleting(true);
+    setResourceDeleteError(null);
+    try {
+      await deleteTopicResource(selectedTopic.id, resource.id);
+      setResourceDeleteTarget(null);
+    } catch (deleteError) {
+      setResourceDeleteError(deleteError instanceof Error ? deleteError.message : copy.topic.deleteResource);
+    } finally {
+      setResourceDeleting(false);
     }
   }
 
@@ -1361,35 +1403,18 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                         ))}
                       </div>
                     </div>
-                    <div className="topicPopoverSection">
-                      <div className="topicPopoverSectionHeader">
-                        <div className="topicPopoverLabel">{copy.topic.resources}</div>
-                        <button
-                          className="topicPopoverInlineAddButton"
-                          type="button"
-                          aria-label={copy.topic.addResource}
-                          title={copy.topic.addResource}
-                          onClick={() => openTopicAssetDialog("resource")}
-                        >
-                          <Plus size={12} weight="bold" aria-hidden="true" />
-                        </button>
-                      </div>
-                      {selectedResourceLinks.length > 0 ? (
-                        <div className="topicPopoverList">
-                          {selectedResourceLinks
-                            .map((resource) => ({ resource, safeUrl: safeExternalUrl(resource.url) }))
-                            .filter((item): item is { resource: typeof selectedResourceLinks[number]; safeUrl: string } => Boolean(item.safeUrl))
-                            .map(({ resource, safeUrl }) => (
-                              <a key={resource.id} className="topicPopoverLink" href={safeUrl} rel="noopener noreferrer nofollow" target="_blank">
-                                <span>{resource.label}</span>
-                                <span className="topicPopoverLinkKind">{resource.kind}</span>
-                              </a>
-                            ))}
-                        </div>
-                      ) : (
-                        <div className="topicPopoverEmpty">{copy.topic.noResources}</div>
-                      )}
-                    </div>
+                    <TopicResourcesSection
+                      copy={copy}
+                      resources={selectedResourceLinks}
+                      deleteTargetId={resourceDeleteTarget?.id ?? null}
+                      deleting={resourceDeleting}
+                      deleteError={resourceDeleteError}
+                      onAdd={() => openTopicAssetDialog("resource")}
+                      onEdit={openTopicResourceEditDialog}
+                      onRequestDelete={(resource) => { setResourceDeleteTarget(resource); setResourceDeleteError(null); }}
+                      onConfirmDelete={(resource) => void confirmDeleteTopicResource(resource)}
+                      onCancelDelete={() => { setResourceDeleteTarget(null); setResourceDeleteError(null); }}
+                    />
                     <div className="topicPopoverSection">
                       <div className="topicPopoverSectionHeader">
                         <div className="topicPopoverLabel">{copy.topic.artifacts}</div>
@@ -1661,6 +1686,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
           topicAssetPrimaryInputRef={topicAssetPrimaryInputRef}
           topicResourceUrlDraft={topicResourceUrlDraft}
           setTopicResourceUrlDraft={setTopicResourceUrlDraft}
+          topicResourceLabelDraft={topicResourceLabelDraft}
+          setTopicResourceLabelDraft={setTopicResourceLabelDraft}
           topicArtifactTitleDraft={topicArtifactTitleDraft}
           setTopicArtifactTitleDraft={setTopicArtifactTitleDraft}
           topicArtifactBodyDraft={topicArtifactBodyDraft}

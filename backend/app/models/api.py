@@ -21,6 +21,12 @@ class UpdateGraphLayoutRequest(BaseModel):
 
 
 class TopicResourceInput(BaseModel):
+    label: str | None = Field(default=None, max_length=240)
+    url: str = Field(min_length=1, max_length=4000)
+
+
+class UpdateTopicResourceInput(BaseModel):
+    label: str = Field(min_length=1, max_length=240)
     url: str = Field(min_length=1, max_length=4000)
 
 

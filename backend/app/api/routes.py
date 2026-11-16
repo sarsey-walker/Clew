@@ -4,6 +4,7 @@ from hashlib import sha1
 from io import BytesIO
 from typing import TYPE_CHECKING
 from urllib.parse import quote
+from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -25,7 +26,7 @@ from app.api.route_helpers import (
     workspace_config_payload as _workspace_config_payload,
 )
 from app.core.config import Settings, get_settings
-from app.models.api import GraphExportRequest, GraphImportRequest, GraphLayoutPositionRequest, RenameGraphRequest, TopicArtifactInput, TopicResourceInput, UpdateGraphLayoutRequest
+from app.models.api import GraphExportRequest, GraphImportRequest, GraphLayoutPositionRequest, RenameGraphRequest, TopicArtifactInput, TopicResourceInput, UpdateGraphLayoutRequest, UpdateTopicResourceInput
 from app.models.domain import Artifact, CreateGraphRequest, GraphProposalEnvelope, QuizStartRequest, QuizStartResponse, QuizSubmitRequest, QuizSubmitResponse, ResourceLink, UpdateWorkspaceConfigRequest
 from app.services.debug_log_service import DebugClientLogRequest, get_debug_log_service
 from app.services.proposal_normalizer import ProposalNormalizer
@@ -178,14 +179,64 @@ def append_topic_resource(
     normalized_url = _normalize_resource_url(body.url)
     if not normalized_url:
         raise HTTPException(status_code=400, detail="resource url is required")
+    label = body.label.strip() if body.label is not None else _resource_label_from_url(normalized_url)
+    if not label:
+        raise HTTPException(status_code=400, detail="resource label is required")
     resource = ResourceLink(
-        id=f"resource-{sha1(normalized_url.encode('utf-8')).hexdigest()[:12]}",
-        label=_resource_label_from_url(normalized_url),
+        id=f"resource-{uuid4().hex}",
+        label=label,
         url=normalized_url,
         kind="link",
     )
     try:
         workspace = repository.append_topic_resource(graph_id, topic_id, resource)
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+    return _workspace_config_payload(workspace, settings)
+
+
+@router.put("/api/v1/workspace/graphs/{graph_id}/topics/{topic_id}/resources/{resource_id}")
+def update_topic_resource(
+    graph_id: str,
+    topic_id: str,
+    resource_id: str,
+    body: UpdateTopicResourceInput,
+    repository: GraphRepository = Depends(get_repository),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    normalized_url = _normalize_resource_url(body.url)
+    normalized_label = body.label.strip()
+    if not normalized_url:
+        raise HTTPException(status_code=400, detail="resource url is required")
+    if not normalized_label:
+        raise HTTPException(status_code=400, detail="resource label is required")
+    try:
+        workspace = repository.update_topic_resource(
+            graph_id,
+            topic_id,
+            resource_id,
+            label=normalized_label,
+            url=normalized_url,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+    return _workspace_config_payload(workspace, settings)
+
+
+@router.delete("/api/v1/workspace/graphs/{graph_id}/topics/{topic_id}/resources/{resource_id}")
+def delete_topic_resource(
+    graph_id: str,
+    topic_id: str,
+    resource_id: str,
+    repository: GraphRepository = Depends(get_repository),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    try:
+        workspace = repository.delete_topic_resource(graph_id, topic_id, resource_id)
     except ValueError as exc:
         message = str(exc)
         status_code = 404 if "not found" in message else 400

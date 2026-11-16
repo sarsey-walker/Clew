@@ -219,6 +219,26 @@ class ProposalToolTests(unittest.TestCase):
             self.assertEqual(response.status_code, 400, response.text)
             self.assertEqual(self.repo.current().snapshot.id, before)
 
+    def test_manual_resource_can_be_named_edited_deleted_and_restored(self):
+        url = f"/api/v1/workspace/graphs/{self.graph_id}/topics/arithmetics/resources"
+        created = self.client.post(url, json={"label": "My notes", "url": "https://example.org/notes"})
+        self.assertEqual(created.status_code, 200, created.text)
+        resource = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics").resources[-1]
+        self.assertEqual(resource.label, "My notes")
+        created_snapshot = created.json()["snapshot"]["id"]
+
+        updated = self.client.put(f"{url}/{resource.id}", json={"label": "Study notes", "url": "https://example.org/study"})
+        self.assertEqual(updated.status_code, 200, updated.text)
+        resource = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics").resources[-1]
+        self.assertEqual((resource.label, resource.url), ("Study notes", "https://example.org/study"))
+
+        deleted = self.client.delete(f"{url}/{resource.id}")
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+        self.assertNotIn(resource.id, [item.id for item in next(topic for topic in self.repo.graph(self.graph_id).topics if topic.id == "arithmetics").resources])
+        self.repo.rollback_to(created_snapshot)
+        restored = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics").resources[-1]
+        self.assertEqual((restored.label, restored.url), ("My notes", "https://example.org/notes"))
+
     def test_import_rejects_invalid_quiz_policy_before_awarding_state(self):
         package = self.repo.export_graph_package(self.graph_id).model_dump(mode="json")
         package["graph"]["topics"][0]["quiz_policy"]["pass_threshold"] = -1

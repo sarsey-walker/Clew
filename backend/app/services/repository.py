@@ -759,6 +759,61 @@ class GraphRepository:
             )
         return self.snapshot(snapshot_id)
 
+    def update_topic_resource(
+        self,
+        graph_id: str,
+        topic_id: str,
+        resource_id: str,
+        *,
+        label: str,
+        url: str,
+    ) -> WorkspaceEnvelope:
+        current = self.current()
+        workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
+        graph = next((item for item in workspace.graphs if item.graph_id == graph_id), None)
+        if graph is None:
+            raise ValueError(f"graph {graph_id} not found")
+        topic = next((item for item in graph.topics if item.id == topic_id), None)
+        if topic is None:
+            raise ValueError(f"topic {topic_id} not found")
+        resource = next((item for item in topic.resources if item.id == resource_id), None)
+        if resource is None:
+            raise ValueError(f"resource {resource_id} not found")
+        resource.label = label
+        resource.url = url
+        with self._connect() as conn:
+            snapshot_id = self._insert_snapshot(
+                conn,
+                workspace,
+                source="topic.resource",
+                reason=f"update resource in {topic.title}",
+                parent_snapshot_id=current.snapshot.id,
+            )
+        return self.snapshot(snapshot_id)
+
+    def delete_topic_resource(self, graph_id: str, topic_id: str, resource_id: str) -> WorkspaceEnvelope:
+        current = self.current()
+        workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
+        graph = next((item for item in workspace.graphs if item.graph_id == graph_id), None)
+        if graph is None:
+            raise ValueError(f"graph {graph_id} not found")
+        topic = next((item for item in graph.topics if item.id == topic_id), None)
+        if topic is None:
+            raise ValueError(f"topic {topic_id} not found")
+        resource = next((item for item in topic.resources if item.id == resource_id), None)
+        if resource is None:
+            raise ValueError(f"resource {resource_id} not found")
+        topic.resources = [item for item in topic.resources if item.id != resource_id]
+        with self._connect() as conn:
+            snapshot_id = self._insert_snapshot(
+                conn,
+                workspace,
+                source="topic.resource",
+                reason=f"delete resource from {topic.title}",
+                parent_snapshot_id=current.snapshot.id,
+            )
+        return self.snapshot(snapshot_id)
+
     def append_topic_artifact(self, graph_id: str, topic_id: str, artifact: Artifact) -> WorkspaceEnvelope:
         current = self.current()
         workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))

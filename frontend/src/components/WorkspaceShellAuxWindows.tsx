@@ -9,7 +9,7 @@ import { AssistantComposer } from "./assistant/AssistantComposer";
 import { AssistantSessionList } from "./assistant/AssistantSessionList";
 import { AssistantThread } from "./assistant/AssistantThread";
 import { Modal } from "./ui/Modal";
-import type { ChatSessionSummary, GraphEnvelope } from "../lib/types";
+import type { ChatSessionSummary, GraphEnvelope, ResourceLink } from "../lib/types";
 import type { TopicAnchorPoint } from "./GraphCanvas";
 
 export function AssistantModelMenuTrigger({
@@ -313,6 +313,8 @@ export function TopicAssetModal({
   topicAssetPrimaryInputRef,
   topicResourceUrlDraft,
   setTopicResourceUrlDraft,
+  topicResourceLabelDraft,
+  setTopicResourceLabelDraft,
   topicArtifactTitleDraft,
   setTopicArtifactTitleDraft,
   topicArtifactBodyDraft,
@@ -321,13 +323,15 @@ export function TopicAssetModal({
   topicAssetSaving,
   submitTopicAssetDialog,
 }: {
-  topicAssetDialog: { kind: "resource" | "artifact"; topicId: string; topicTitle: string };
+  topicAssetDialog: { kind: "resource" | "artifact"; topicId: string; topicTitle: string; resource: ResourceLink | null };
   topicAssetModalRef: React.RefObject<HTMLDivElement | null>;
   closeTopicAssetModal: () => void;
   copy: AppCopy;
   topicAssetPrimaryInputRef: React.MutableRefObject<HTMLElement | null>;
   topicResourceUrlDraft: string;
   setTopicResourceUrlDraft: React.Dispatch<React.SetStateAction<string>>;
+  topicResourceLabelDraft: string;
+  setTopicResourceLabelDraft: React.Dispatch<React.SetStateAction<string>>;
   topicArtifactTitleDraft: string;
   setTopicArtifactTitleDraft: React.Dispatch<React.SetStateAction<string>>;
   topicArtifactBodyDraft: string;
@@ -340,8 +344,12 @@ export function TopicAssetModal({
     <Modal
       id="topic-asset-dialog"
       modalRef={topicAssetModalRef}
-      title={topicAssetDialog.kind === "resource" ? copy.dialogs.addResourceTitle : copy.dialogs.addArtifactTitle}
-      description={topicAssetDialog.kind === "resource" ? copy.dialogs.addResourceBody : copy.dialogs.addArtifactBody}
+      title={topicAssetDialog.kind === "resource"
+        ? topicAssetDialog.resource ? copy.dialogs.editResourceTitle : copy.dialogs.addResourceTitle
+        : copy.dialogs.addArtifactTitle}
+      description={topicAssetDialog.kind === "resource"
+        ? topicAssetDialog.resource ? copy.dialogs.editResourceBody : copy.dialogs.addResourceBody
+        : copy.dialogs.addArtifactBody}
       meta={<span className="uiTag">{topicAssetDialog.topicTitle}</span>}
       closeLabel={copy.dialogs.cancel}
       onClose={closeTopicAssetModal}
@@ -352,7 +360,7 @@ export function TopicAssetModal({
           disabled={
             topicAssetSaving ||
             (topicAssetDialog.kind === "resource"
-              ? !topicResourceUrlDraft.trim()
+              ? !topicResourceUrlDraft.trim() || Boolean(topicAssetDialog.resource && !topicResourceLabelDraft.trim())
               : !topicArtifactTitleDraft.trim() || !topicArtifactBodyDraft.trim())
           }
           onClick={() => void submitTopicAssetDialog()}
@@ -361,24 +369,34 @@ export function TopicAssetModal({
           {topicAssetSaving
             ? copy.dialogs.creating
             : topicAssetDialog.kind === "resource"
-              ? copy.dialogs.saveResource
+              ? topicAssetDialog.resource ? copy.dialogs.saveResourceChanges : copy.dialogs.saveResource
               : copy.dialogs.saveArtifact}
         </button>
       </>}
     >
       {topicAssetDialog.kind === "resource" ? (
-        <label className="uiField">
-          <span className="uiLabel">{copy.dialogs.resourceUrl}</span>
-          <textarea
-            ref={(node) => {
-              topicAssetPrimaryInputRef.current = node;
-            }}
-            className="uiTextarea"
-            value={topicResourceUrlDraft}
-            onChange={(event) => setTopicResourceUrlDraft(event.target.value)}
-            placeholder={copy.dialogs.resourceUrlPlaceholder}
-          />
-        </label>
+        <>
+          <label className="uiField">
+            <span className="uiLabel">{topicAssetDialog.resource ? copy.dialogs.resourceLabel : copy.dialogs.resourceLabelOptional}</span>
+            <input
+              ref={(node) => { topicAssetPrimaryInputRef.current = node; }}
+              className="uiInput"
+              value={topicResourceLabelDraft}
+              onChange={(event) => setTopicResourceLabelDraft(event.target.value)}
+              placeholder={copy.dialogs.resourceLabelPlaceholder}
+            />
+          </label>
+          <label className="uiField">
+            <span className="uiLabel">{copy.dialogs.resourceUrl}</span>
+            <textarea
+              ref={(node) => { topicAssetPrimaryInputRef.current = node; }}
+              className="uiTextarea"
+              value={topicResourceUrlDraft}
+              onChange={(event) => setTopicResourceUrlDraft(event.target.value)}
+              placeholder={copy.dialogs.resourceUrlPlaceholder}
+            />
+          </label>
+        </>
       ) : (
         <>
           <label className="uiField">

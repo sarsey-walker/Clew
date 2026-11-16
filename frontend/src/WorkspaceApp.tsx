@@ -1025,16 +1025,40 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     }
   }
 
-  async function addTopicResource(topicId: string, url: string): Promise<void> {
+  async function addTopicResource(topicId: string, label: string, url: string): Promise<void> {
     if (!activeGraph) return;
     const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/resources`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: url.trim() }),
+      body: JSON.stringify({ label: label.trim() || undefined, url: url.trim() }),
     });
     if (!response.ok) {
       throw new Error(await readErrorMessage(response, copy.dialogs.addResourceTitle));
     }
+    const payload = (await response.json()) as WorkspaceEnvelope;
+    setData(payload);
+    await loadSnapshots();
+  }
+
+  async function updateTopicResource(topicId: string, resourceId: string, label: string, url: string): Promise<void> {
+    if (!activeGraph) return;
+    const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/resources/${resourceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: label.trim(), url: url.trim() }),
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, copy.dialogs.editResourceTitle));
+    const payload = (await response.json()) as WorkspaceEnvelope;
+    setData(payload);
+    await loadSnapshots();
+  }
+
+  async function deleteTopicResource(topicId: string, resourceId: string): Promise<void> {
+    if (!activeGraph) return;
+    const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/resources/${resourceId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, copy.topic.deleteResource));
     const payload = (await response.json()) as WorkspaceEnvelope;
     setData(payload);
     await loadSnapshots();
@@ -1331,6 +1355,8 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         }}
         topicDetails={{
           addTopicResource,
+          updateTopicResource,
+          deleteTopicResource,
           addTopicArtifact,
           selectedTopic,
           selectedTopicAnchor,
