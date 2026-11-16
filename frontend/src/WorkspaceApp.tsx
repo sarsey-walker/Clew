@@ -27,7 +27,7 @@ import {
   firstProposedTopicId,
   templatePrompt,
 } from "./lib/graph";
-import { supportsObsidianDirectoryExport, writeObsidianExportPackageToDirectory } from "./lib/obsidianExport";
+import { writeObsidianExportPackageToDirectory } from "./lib/obsidianExport";
 import {
   buildObsidianImportPreview,
   type ObsidianImportOptions,
@@ -116,6 +116,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
   const [exportGraphTitleDraft, setExportGraphTitleDraft] = useState("");
   const [exportGraphIncludeProgressDraft, setExportGraphIncludeProgressDraft] = useState(true);
   const [exportGraphFormatDraft, setExportGraphFormatDraft] = useState<GraphExportFormat>("mapmind_graph_export");
+  const [exportGraphObsidianDeliveryDraft, setExportGraphObsidianDeliveryDraft] = useState<"zip" | "folder">("zip");
   const [exportGraphObsidianOptionsDraft, setExportGraphObsidianOptionsDraft] = useState<ObsidianExportOptions>(defaultObsidianExportOptions);
   const [deleteConfirm, setDeleteConfirm] = useState<{ graphId: string; title: string } | null>(null);
   const [sessionDeleteConfirm, setSessionDeleteConfirm] = useState<{ sessionId: string; title: string } | null>(null);
@@ -236,6 +237,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     setExportGraphTitleDraft("");
     setExportGraphIncludeProgressDraft(true);
     setExportGraphFormatDraft("mapmind_graph_export");
+    setExportGraphObsidianDeliveryDraft("zip");
     setExportGraphObsidianOptionsDraft(defaultObsidianExportOptions());
   }, []);
   const openImportGraphModal = useCallback(() => {
@@ -253,6 +255,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     setExportGraphTitleDraft(graph.title);
     setExportGraphIncludeProgressDraft(true);
     setExportGraphFormatDraft("mapmind_graph_export");
+    setExportGraphObsidianDeliveryDraft("zip");
     setExportGraphObsidianOptionsDraft(defaultObsidianExportOptions());
     setExportGraphError(null);
   }, []);
@@ -814,9 +817,9 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     setExportGraphLoading(true);
     setExportGraphError(null);
     try {
-      if (exportGraphFormatDraft === "mapmind_obsidian_export" && !supportsObsidianDirectoryExport()) {
-        throw new Error(copy.errors.exportGraphObsidianUnsupported);
-      }
+      const useObsidianZip = exportGraphFormatDraft === "mapmind_obsidian_export"
+        && !window.clewDesktop
+        && exportGraphObsidianDeliveryDraft === "zip";
       const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${graph.graph_id}/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -825,12 +828,27 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           include_progress: exportGraphIncludeProgressDraft,
           format: exportGraphFormatDraft,
           obsidian: exportGraphFormatDraft === "mapmind_obsidian_export" ? exportGraphObsidianOptionsDraft : undefined,
+          obsidian_delivery: exportGraphFormatDraft === "mapmind_obsidian_export" ? (useObsidianZip ? "zip" : "folder") : "folder",
         }),
       });
       if (!response.ok) {
         throw new Error(await readErrorMessage(response, copy.errors.exportGraph));
       }
       if (exportGraphFormatDraft === "mapmind_obsidian_export") {
+        if (useObsidianZip) {
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          const safeBase = (exportGraphTitleDraft.trim() || graph.title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "graph";
+          link.href = objectUrl;
+          link.download = `${safeBase}.zip`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(objectUrl);
+          closeExportGraphModal();
+          return;
+        }
         const payload = (await response.json()) as ObsidianGraphExportPackagePayload;
         if (!await writeObsidianExportPackageToDirectory(payload)) return;
       } else {
@@ -1480,6 +1498,8 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
         setExportGraphIncludeProgressDraft={setExportGraphIncludeProgressDraft}
         exportGraphFormatDraft={exportGraphFormatDraft}
         setExportGraphFormatDraft={setExportGraphFormatDraft}
+        exportGraphObsidianDeliveryDraft={exportGraphObsidianDeliveryDraft}
+        setExportGraphObsidianDeliveryDraft={setExportGraphObsidianDeliveryDraft}
         exportGraphObsidianOptionsDraft={exportGraphObsidianOptionsDraft}
         setExportGraphObsidianOptionsDraft={setExportGraphObsidianOptionsDraft}
         exportGraphError={exportGraphError}

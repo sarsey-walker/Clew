@@ -39,6 +39,7 @@ class GraphExportRequest(BaseModel):
     include_progress: bool = True
     format: Literal["mapmind_graph_export", "mapmind_obsidian_export"] = "mapmind_graph_export"
     obsidian: "ObsidianExportOptions | None" = None
+    obsidian_delivery: Literal["folder", "zip"] = "folder"
 
 
 class GraphExportPackage(BaseModel):

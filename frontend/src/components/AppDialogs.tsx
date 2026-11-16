@@ -97,6 +97,8 @@ type AppDialogsProps = {
   setExportGraphIncludeProgressDraft: StateSetter<boolean>;
   exportGraphFormatDraft: GraphExportFormat;
   setExportGraphFormatDraft: StateSetter<GraphExportFormat>;
+  exportGraphObsidianDeliveryDraft: "zip" | "folder";
+  setExportGraphObsidianDeliveryDraft: StateSetter<"zip" | "folder">;
   exportGraphObsidianOptionsDraft: ObsidianExportOptions;
   setExportGraphObsidianOptionsDraft: StateSetter<ObsidianExportOptions>;
   exportGraphError: string | null;
@@ -189,6 +191,8 @@ export function AppDialogs(props: AppDialogsProps): React.JSX.Element {
     setExportGraphIncludeProgressDraft,
     exportGraphFormatDraft,
     setExportGraphFormatDraft,
+    exportGraphObsidianDeliveryDraft,
+    setExportGraphObsidianDeliveryDraft,
     exportGraphObsidianOptionsDraft,
     setExportGraphObsidianOptionsDraft,
     exportGraphError,
@@ -342,6 +346,8 @@ export function AppDialogs(props: AppDialogsProps): React.JSX.Element {
         setIncludeProgressDraft={setExportGraphIncludeProgressDraft}
         formatDraft={exportGraphFormatDraft}
         setFormatDraft={setExportGraphFormatDraft}
+        obsidianDeliveryDraft={exportGraphObsidianDeliveryDraft}
+        setObsidianDeliveryDraft={setExportGraphObsidianDeliveryDraft}
         obsidianOptionsDraft={exportGraphObsidianOptionsDraft}
         setObsidianOptionsDraft={setExportGraphObsidianOptionsDraft}
         error={exportGraphError}

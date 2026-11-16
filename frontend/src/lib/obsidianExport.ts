@@ -8,6 +8,10 @@ export function supportsObsidianDirectoryExport(): boolean {
   return typeof window !== "undefined" && (!!window.clewDesktop || typeof (window as DirectoryPickerWindow).showDirectoryPicker === "function");
 }
 
+export function supportsBrowserObsidianDirectoryExport(): boolean {
+  return typeof window !== "undefined" && !window.clewDesktop && typeof (window as DirectoryPickerWindow).showDirectoryPicker === "function";
+}
+
 export async function writeObsidianExportPackageToDirectory(
   exportPackage: ObsidianGraphExportPackagePayload,
 ): Promise<boolean> {

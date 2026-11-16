@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from hashlib import sha1
+from io import BytesIO
 from typing import TYPE_CHECKING
+from urllib.parse import quote
+from zipfile import ZIP_DEFLATED, ZipFile
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.api.deps import (
     ensure_debug_logs_enabled,
@@ -234,7 +237,20 @@ def export_workspace_graph(
                 include_progress=request.include_progress,
                 options=request.obsidian,
             )
+            if request.obsidian_delivery == "zip":
+                archive = BytesIO()
+                with ZipFile(archive, mode="w", compression=ZIP_DEFLATED) as zip_file:
+                    for file in package.files:
+                        zip_file.writestr(f"{package.folder_name}/{file.path}", file.body)
+                filename = quote(f"{package.folder_name}.zip")
+                return Response(
+                    content=archive.getvalue(),
+                    media_type="application/zip",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+                )
         else:
+            if request.obsidian_delivery != "folder":
+                raise HTTPException(status_code=400, detail="ZIP delivery is only available for Obsidian exports.")
             package = repository.export_graph_package(
                 graph_id,
                 title=request.title,

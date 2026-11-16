@@ -5,6 +5,7 @@ import { SwitchRow } from "../ui/SwitchRow";
 
 import type { AppCopy } from "../../lib/appCopy";
 import type { GraphEnvelope, GraphExportFormat, ObsidianExportOptions } from "../../lib/types";
+import { supportsBrowserObsidianDirectoryExport } from "../../lib/obsidianExport";
 
 function patchObsidianExportOptions(
   setOptions: React.Dispatch<React.SetStateAction<ObsidianExportOptions>>,
@@ -24,6 +25,8 @@ export function ExportGraphDialog({
   setIncludeProgressDraft,
   formatDraft,
   setFormatDraft,
+  obsidianDeliveryDraft,
+  setObsidianDeliveryDraft,
   obsidianOptionsDraft,
   setObsidianOptionsDraft,
   error,
@@ -41,6 +44,8 @@ export function ExportGraphDialog({
   setIncludeProgressDraft: React.Dispatch<React.SetStateAction<boolean>>;
   formatDraft: GraphExportFormat;
   setFormatDraft: React.Dispatch<React.SetStateAction<GraphExportFormat>>;
+  obsidianDeliveryDraft: "zip" | "folder";
+  setObsidianDeliveryDraft: React.Dispatch<React.SetStateAction<"zip" | "folder">>;
   obsidianOptionsDraft: ObsidianExportOptions;
   setObsidianOptionsDraft: React.Dispatch<React.SetStateAction<ObsidianExportOptions>>;
   error: string | null;
@@ -82,13 +87,20 @@ export function ExportGraphDialog({
       <div className="uiRows">
         <SwitchRow title={copy.dialogs.includeOwnProgress} checked={includeProgressDraft} onChange={setIncludeProgressDraft} />
         {obsidian ? <>
+          {!window.clewDesktop ? <label className="uiField">
+            <span className="uiLabel">{copy.dialogs.obsidianDelivery}</span>
+            <select className="uiSelect" value={obsidianDeliveryDraft} onChange={(event) => setObsidianDeliveryDraft(event.target.value as "zip" | "folder")}>
+              <option value="zip">{copy.dialogs.obsidianDeliveryZip}</option>
+              {supportsBrowserObsidianDirectoryExport() ? <option value="folder">{copy.dialogs.obsidianDeliveryFolder}</option> : null}
+            </select>
+          </label> : null}
           <SwitchRow title={copy.dialogs.obsidianUseFoldersAsZones} help={copy.dialogs.obsidianUseFoldersAsZonesHelp} checked={obsidianOptionsDraft.use_folders_as_zones} onChange={(checked) => patchObsidianExportOptions(setObsidianOptionsDraft, { use_folders_as_zones: checked })} />
           <SwitchRow title={copy.dialogs.obsidianIncludeDescriptions} checked={obsidianOptionsDraft.include_descriptions} onChange={(checked) => patchObsidianExportOptions(setObsidianOptionsDraft, { include_descriptions: checked })} />
           <SwitchRow title={copy.dialogs.obsidianIncludeResources} checked={obsidianOptionsDraft.include_resources} onChange={(checked) => patchObsidianExportOptions(setObsidianOptionsDraft, { include_resources: checked })} />
           <SwitchRow title={copy.dialogs.obsidianIncludeArtifacts} checked={obsidianOptionsDraft.include_artifacts} onChange={(checked) => patchObsidianExportOptions(setObsidianOptionsDraft, { include_artifacts: checked })} />
         </> : null}
       </div>
-      {obsidian ? <p className="uiHelp">{copy.dialogs.obsidianExportHint}</p> : null}
+      {obsidian ? <p className="uiHelp">{!window.clewDesktop && obsidianDeliveryDraft === "zip" ? copy.dialogs.obsidianZipHint : copy.dialogs.obsidianExportHint}</p> : null}
       {error ? <div className="inlineNotice inlineNoticeError">{error}</div> : null}
     </Modal>
   );

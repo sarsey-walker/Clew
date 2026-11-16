@@ -89,8 +89,9 @@ rejected. The complete folder is published atomically after all files are staged
 cancelling the picker writes nothing. Choose another parent or rename an existing
 export before repeating it.
 
-The browser edition uses File System Access when available. If the browser does
-not support it, Clew explains that export requires folder write access.
+The browser edition downloads a ZIP by default, so it does not need permission
+to write into a folder. Extract the ZIP and open the contained folder in Obsidian.
+Browsers that support File System Access also offer direct folder export.
 
 ## Compatibility Notes
 
