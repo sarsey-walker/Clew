@@ -186,10 +186,12 @@ class ChatGPTAuth:
     account label are not secret and live next to the local database."""
 
     def __init__(self, *, redirect_uri: str, registration_path: Path, store: CredentialStore | None = None,
-                 http: httpx.AsyncClient | None = None, app_name: str = "Clew"):
+                 legacy_store: CredentialStore | None = None, http: httpx.AsyncClient | None = None,
+                 app_name: str = "Clew"):
         self.redirect_uri = redirect_uri
         self.registration_path = registration_path
         self.store = store or KeyringCredentialStore()
+        self.legacy_store = legacy_store
         self.http = http or httpx.AsyncClient(timeout=httpx.Timeout(30, read=180))
         self.app_name = app_name
         self.pending: PendingLogin | None = None
@@ -456,17 +458,43 @@ class ChatGPTAuth:
 
     # Session
 
-    def connection(self) -> dict | None:
+    @staticmethod
+    def _connection_complete(connection: dict) -> bool:
+        expires = connection.get("expires_at")
+        return (all(isinstance(connection.get(key), str) and connection[key]
+                    for key in ("client_id", "subject", "access_token", "refresh_token"))
+                and not isinstance(expires, bool) and isinstance(expires, (int, float)) and math.isfinite(expires)
+                and isinstance(connection.get("scopes"), list)
+                and all(isinstance(scope, str) for scope in connection["scopes"]))
+
+    def _read_saved_connection(self) -> dict | None:
         connection = self.store.read()
+        if connection is not None or self.legacy_store is None:
+            return connection
+        try:
+            legacy = self.legacy_store.read()
+        except ChatGPTError as exc:
+            if exc.code != "credential_storage_corrupt":
+                raise
+            return None
+        registration = self.registration()
+        if (not isinstance(legacy, dict) or not self._connection_complete(legacy)
+                or legacy.get("client_id") != registration.get("client_id")
+                or legacy.get("subject") != registration.get("subject")):
+            return None
+        self.store.write(legacy)
+        try:
+            self.legacy_store.delete()
+        except ChatGPTError:
+            self.store.delete()
+            raise
+        return legacy
+
+    def connection(self) -> dict | None:
+        connection = self._read_saved_connection()
         if connection is None:
             return None
-        expires = connection.get("expires_at") if isinstance(connection, dict) else None
-        if (not isinstance(connection, dict)
-                or any(not isinstance(connection.get(key), str) or not connection[key]
-                       for key in ("client_id", "subject", "access_token", "refresh_token"))
-                or isinstance(expires, bool) or not isinstance(expires, (int, float)) or not math.isfinite(expires)
-                or not isinstance(connection.get("scopes"), list)
-                or not all(isinstance(scope, str) for scope in connection["scopes"])):
+        if not isinstance(connection, dict) or not self._connection_complete(connection):
             raise ChatGPTError("credential_storage_corrupt", "The saved ChatGPT connection is incomplete. Sign out and sign in again.")
         registration = self.registration()
         if (connection["client_id"] != registration.get("client_id")
@@ -548,7 +576,7 @@ class ChatGPTAuth:
         self.last_error = None
         warning = "Local credentials were removed, but ChatGPT did not confirm the disconnect. Remove Clew in ChatGPT Settings → Connected apps."
         try:
-            connection = self.store.read()
+            connection = self.connection()
         except ChatGPTError:
             self.store.delete()
             self._clear_account_registration()

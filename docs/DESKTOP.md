@@ -33,9 +33,10 @@ Use **Help → Open Data Folder** to locate your installation's data. Default lo
 `knowledge_graph.sqlite3` stores the workspace, snapshots, chats and quizzes.
 `chatgpt-registration.json` stores the issued client ID, verified account label,
 and installation ID. Access/refresh tokens are stored in Keychain, Windows
-Credential Locker, or Secret Service. The desktop credential entry is derived
-from the resolved database path, so separate data directories and smoke profiles
-have independent, stable credentials.
+Credential Locker, or Secret Service. Each credential entry is derived from the
+resolved database path, so browser development, desktop data directories and
+smoke profiles have independent, stable credentials. They can use the same
+ChatGPT account after separate sign-ins.
 
 The desktop app has its own data directory. It does not overwrite a source checkout's `backend/data`. Move graphs between editions through graph export/import. Back up the complete data directory while the app is closed. Sign-out and uninstallation preserve the data.
 

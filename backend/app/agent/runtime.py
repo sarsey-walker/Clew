@@ -68,11 +68,13 @@ class AgentRuntime:
         self.repository = repository
         self.store = AgentStore(repository)
         self.store.recover_interrupted()
-        credential_account = ("desktop-" + hashlib.sha256(str(settings.db_path.resolve()).encode("utf-8")).hexdigest()[:32]
-                              if settings.desktop_token else "connection")
+        database_hash = hashlib.sha256(str(settings.db_path.resolve()).encode("utf-8")).hexdigest()[:32]
+        credential_account = "workspace-" + database_hash
+        legacy_account = "desktop-" + database_hash if settings.desktop_token else "connection"
         self.auth = auth or ChatGPTAuth(redirect_uri=f"http://127.0.0.1:{settings.api_port}{CALLBACK_PATH}",
                                         registration_path=settings.db_path.parent / "chatgpt-registration.json",
-                                        store=KeyringCredentialStore(credential_account))
+                                        store=KeyringCredentialStore(credential_account),
+                                        legacy_store=KeyringCredentialStore(legacy_account))
         self.client = client or ChatGPTClient(self.auth)
         self.runs: dict[str, AgentRun] = {}
         self.wake = asyncio.Event()

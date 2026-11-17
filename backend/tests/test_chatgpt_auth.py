@@ -15,7 +15,7 @@ from app.agent.chatgpt_auth import LOGIN_TTL_SECONDS, ChatGPTError, KeyringCrede
 from app.agent.runtime import AgentRuntime
 from app.core.config import Settings
 from app.services.repository import GraphRepository
-from fake_chatgpt import CLIENT_ID, FakeChatGPT, fake_auth, id_token, signed_in
+from fake_chatgpt import CLIENT_ID, FakeChatGPT, MemoryStore, fake_auth, id_token, signed_in
 
 
 class ChatGPTAuthTests(unittest.IsolatedAsyncioTestCase):
@@ -59,6 +59,41 @@ class ChatGPTAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["account"]["email"], "learner@example.com")
         self.assertEqual(await auth.access_token(), "access-1")
         self.assertNotIn("access-1", self.registration.read_text())
+
+    async def test_matching_legacy_connection_moves_to_scoped_store(self):
+        auth = await self.auth()
+        auth._save_registration(client_id=CLIENT_ID, subject="user-1")
+        legacy = MemoryStore(signed_in())
+        auth.legacy_store = legacy
+        self.assertTrue(auth.status()["authenticated"])
+        self.assertEqual(auth.store.read()["subject"], "user-1")
+        self.assertIsNone(legacy.read())
+
+    async def test_unrelated_legacy_connection_does_not_block_or_get_revoked(self):
+        auth = await self.auth()
+        auth._save_registration(client_id="another-client", subject="another-subject")
+        legacy = MemoryStore(signed_in())
+        auth.legacy_store = legacy
+        self.assertFalse(auth.status()["authenticated"])
+        self.assertIsNone(auth.status()["error"])
+        login = await auth.start_login()
+        self.assertIn("client_id=dynamic_agent_client", login.auth_url)
+        await auth.logout()
+        self.assertIsNotNone(legacy.read())
+        self.assertEqual(self.peer.revoked, [])
+
+    async def test_credential_entries_are_scoped_to_each_database(self):
+        browser = Settings(db_path=Path(self.temp.name) / "browser" / "knowledge_graph.sqlite3")
+        desktop = Settings(db_path=Path(self.temp.name) / "desktop" / "knowledge_graph.sqlite3", desktop_token="launch-token")
+        browser_runtime = AgentRuntime(browser, GraphRepository(browser.db_path))
+        desktop_runtime = AgentRuntime(desktop, GraphRepository(desktop.db_path))
+        self.addAsyncCleanup(browser_runtime.close)
+        self.addAsyncCleanup(desktop_runtime.close)
+        self.assertNotEqual(browser_runtime.auth.store.account, desktop_runtime.auth.store.account)
+        self.assertTrue(browser_runtime.auth.store.account.startswith("workspace-"))
+        self.assertTrue(desktop_runtime.auth.store.account.startswith("workspace-"))
+        self.assertEqual(browser_runtime.auth.legacy_store.account, "connection")
+        self.assertTrue(desktop_runtime.auth.legacy_store.account.startswith("desktop-"))
 
     async def test_refreshing_a_completed_callback_does_not_exchange_the_code_again(self):
         auth = await self.auth()
