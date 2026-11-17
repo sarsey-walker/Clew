@@ -409,6 +409,7 @@ function GraphCanvasComponent({
   initialZoom = 1,
   targetZoom,
   centerOnNodeId,
+  centerOnRequestId,
   staticLayout = false,
   graphCacheKey = "default",
   nodePositions,
@@ -437,6 +438,7 @@ function GraphCanvasComponent({
   initialZoom?: number;
   targetZoom?: number;
   centerOnNodeId?: string | null;
+  centerOnRequestId?: number;
   staticLayout?: boolean;
   graphCacheKey?: string;
   nodePositions?: ManualNodePositions | null;
@@ -570,7 +572,7 @@ function GraphCanvasComponent({
     };
     raf = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(raf);
-  }, [centerOnNodeId]);
+  }, [centerOnNodeId, centerOnRequestId]);
 
   const nodes = useMemo<GraphNode[]>(
     () =>
@@ -1827,6 +1829,7 @@ export const GraphCanvas = React.memo(GraphCanvasComponent, (prev, next) => {
   if (prev.initialZoom !== next.initialZoom) return false;
   if (prev.targetZoom !== next.targetZoom) return false;
   if (prev.centerOnNodeId !== next.centerOnNodeId) return false;
+  if (prev.centerOnRequestId !== next.centerOnRequestId) return false;
   if (prev.staticLayout !== next.staticLayout) return false;
   if (prev.graphCacheKey !== next.graphCacheKey) return false;
   if (prev.layoutEditMode !== next.layoutEditMode) return false;

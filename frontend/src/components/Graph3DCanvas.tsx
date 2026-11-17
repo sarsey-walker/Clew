@@ -465,6 +465,7 @@ export function Graph3DCanvas({
   onSelectTopic,
   onSelectedTopicAnchorChange,
   themeMode,
+  focusRequest,
 }: {
   topics: Topic[];
   edges: Edge[];
@@ -477,6 +478,7 @@ export function Graph3DCanvas({
   onSelectTopic: (topicId: string | null, anchor: TopicAnchorPoint | null) => void;
   onSelectedTopicAnchorChange: (anchor: TopicAnchorPoint | null) => void;
   themeMode: GraphCanvasThemeMode;
+  focusRequest?: { topicId: string; nonce: number } | null;
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -918,6 +920,18 @@ export function Graph3DCanvas({
     const selectedPosition = selectedTopicId ? state.positions.get(selectedTopicId) : null;
     onSelectedTopicAnchorChange(selectedPosition ? projectedAnchor(selectedPosition, state) : null);
   }, [edges, frontierEdgeIds, onSelectedTopicAnchorChange, pathEdgeIds, pathNodeIds, rootIds, selectedTopicId, themeMode, topics, zones]);
+
+  useEffect(() => {
+    if (!focusRequest) return;
+    const state = sceneRef.current;
+    const position = state?.positions.get(focusRequest.topicId);
+    if (!state || !position) return;
+    const direction = state.camera.position.clone().sub(state.controls.target).normalize();
+    state.controls.target.copy(position);
+    state.camera.position.copy(position).add(direction.multiplyScalar(Math.max(72, layout.radius * 0.18)));
+    state.controls.update();
+    onSelectedTopicAnchorChangeRef.current(projectedAnchor(position, state));
+  }, [focusRequest, layout.radius]);
 
   return (
     <div ref={containerRef} className="graph3dSurface" tabIndex={0} aria-label="Interactive 3D knowledge graph">

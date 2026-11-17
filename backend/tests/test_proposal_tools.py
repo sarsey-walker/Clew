@@ -125,7 +125,7 @@ class ProposalToolTests(unittest.TestCase):
         self.assertEqual({tool["type"] for tool in specs}, {"function"})
         self.assertTrue(all("parameters" in tool for tool in specs))
         names = {tool["name"] for tool in specs}
-        self.assertEqual(names, {"read_graph", "read_topic", "propose_ingest", "propose_expand", "ask_question", "present_quiz", "create_closure_quiz"})
+        self.assertEqual(names, {"read_graph", "read_topic", "propose_ingest", "propose_expand", "ask_question", "present_quiz", "show_graph_path", "create_closure_quiz"})
         self.assertNotIn("answer", names)
 
     def test_edge_replacement_validates_the_final_topology(self):
@@ -244,15 +244,19 @@ class ProposalToolTests(unittest.TestCase):
         before_state = topic.state
         before_snapshot = self.repo.current().snapshot.id
         url = f"/api/v1/workspace/graphs/{self.graph_id}/topics/arithmetics/review"
-        response = self.client.post(url, json={"rating": "remembered"})
+        evidence = {"question": "How does arithmetic prepare you for algebra?",
+                    "reference": "Arithmetic gives the numeric intuition used in algebra.",
+                    "answer": "It helps me manipulate numbers before variables."}
+        response = self.client.post(url, json={"rating": "remembered", **evidence})
         self.assertEqual(response.status_code, 200, response.text)
         reviewed = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics")
         self.assertEqual(reviewed.state, before_state)
         self.assertEqual(reviewed.review.interval_days, 3)
         self.assertEqual(reviewed.review.streak, 1)
         self.assertIsNotNone(reviewed.review.due_at)
+        self.assertEqual(reviewed.review.attempts[0].answer, evidence["answer"])
         for rating, interval, streak in [("remembered", 7, 2), ("hard", 3, 0), ("again", 1, 0)]:
-            response = self.client.post(url, json={"rating": rating})
+            response = self.client.post(url, json={"rating": rating, **evidence})
             self.assertEqual(response.status_code, 200, response.text)
             reviewed = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics")
             self.assertEqual((reviewed.review.interval_days, reviewed.review.streak), (interval, streak))
@@ -260,9 +264,18 @@ class ProposalToolTests(unittest.TestCase):
         clean_package = self.repo.export_graph_package(self.graph_id, include_progress=False)
         clean_topic = next(item for item in clean_package.graph.topics if item.id == "arithmetics")
         self.assertIsNone(clean_topic.review.due_at)
+        self.assertEqual(clean_topic.review.attempts, [])
         self.repo.rollback_to(before_snapshot)
         restored = next(item for item in self.repo.graph(self.graph_id).topics if item.id == "arithmetics")
         self.assertIsNone(restored.review.due_at)
+        self.assertEqual(restored.review.attempts, [])
+
+    def test_review_requires_answer_evidence_before_scheduling(self):
+        before_snapshot = self.repo.current().snapshot.id
+        url = f"/api/v1/workspace/graphs/{self.graph_id}/topics/arithmetics/review"
+        self.assertEqual(self.client.post(url, json={"rating": "remembered"}).status_code, 422)
+        self.assertEqual(self.client.post(url, json={"rating": "remembered", "question": "A question long enough", "reference": "A reference long enough", "answer": "   "}).status_code, 400)
+        self.assertEqual(self.repo.current().snapshot.id, before_snapshot)
 
     def test_import_rejects_invalid_quiz_policy_before_awarding_state(self):
         package = self.repo.export_graph_package(self.graph_id).model_dump(mode="json")

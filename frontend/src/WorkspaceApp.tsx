@@ -372,6 +372,8 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     () => availableGraphs.find((graph) => graph.graph_id === activeGraphId) ?? availableGraphs[0] ?? null,
     [activeGraphId, availableGraphs],
   );
+  const [graphFocusRequest, setGraphFocusRequest] = useState<{ topicId: string; nonce: number } | null>(null);
+  useEffect(() => setGraphFocusRequest(null), [activeGraph?.graph_id]);
   const activeGraphManualLayout = useMemo(() => readManualLayoutPositions(activeGraph), [activeGraph]);
   const {
     selectedTopicId,
@@ -1065,12 +1067,12 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     await loadSnapshots();
   }
 
-  async function recordTopicReview(topicId: string, rating: "again" | "hard" | "remembered"): Promise<void> {
+  async function recordTopicReview(topicId: string, rating: "again" | "hard" | "remembered", answer: string, prompt: TopicReviewPrompt): Promise<void> {
     if (!activeGraph) return;
     const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rating }),
+      body: JSON.stringify({ rating, answer: answer.trim(), question: prompt.question, reference: prompt.reference }),
     });
     if (!response.ok) throw new Error(await readErrorMessage(response, copy.topic.reviewError));
     setData((await response.json()) as WorkspaceEnvelope);
@@ -1097,6 +1099,20 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     });
     if (!response.ok) throw new Error(await readErrorMessage(response, copy.topic.connectionError));
     return (await response.json()) as TopicReviewPrompt;
+  }
+
+  async function startTopicDiagnosis(topicId: string): Promise<void> {
+    if (!activeGraph) throw new Error(copy.topic.diagnosisError);
+    const response = await apiFetch(`${API_BASE}/api/v1/graphs/${activeGraph.graph_id}/chat/diagnose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic_id: topicId, model: selectedChatModel ?? data?.workspace.config.default_model ?? null }),
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, copy.topic.diagnosisError));
+    const payload = (await response.json()) as { session_id: string; run_id: string };
+    setActiveSessionId(payload.session_id);
+    setAssistantWidth(360);
+    await loadSessions();
   }
 
   async function addTopicArtifact(topicId: string, title: string, body: string): Promise<void> {
@@ -1383,6 +1399,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           selectedTopicId,
           graphLayoutDraft,
           activeGraphManualLayout,
+          graphFocusRequest,
           liveDisableIdleAnimations,
           showGraphLoadingState,
           showGraphEmptyState,
@@ -1395,6 +1412,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           recordTopicReview,
           generateTopicReviewPrompt,
           generateTopicConnectionPrompt,
+          startTopicDiagnosis,
           addTopicArtifact,
           selectedTopic,
           selectedTopicAnchor,
@@ -1425,6 +1443,12 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
               setQuizAnswers({});
               setQuizReviews(null);
               setQuizError(null);
+            },
+            openGraphPath: (topicId) => {
+              if (!activeGraph?.topics.some((topic) => topic.id === topicId)) return;
+              setSelectedTopicId(topicId);
+              setSelectedTopicAnchor(null);
+              setGraphFocusRequest((current) => ({ topicId, nonce: (current?.nonce ?? 0) + 1 }));
             },
           },
           assistantResizing,

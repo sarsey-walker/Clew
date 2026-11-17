@@ -166,3 +166,24 @@ class ConnectionPromptRouteTests(unittest.TestCase):
         response = self.client.post(self.url, json={"edge_id": "edge-arith-algebra"})
         self.assertEqual(response.status_code, 502)
         self.assertEqual(response.json()["detail"], "ChatGPT plan limit reached")
+
+
+class DiagnosticRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.client, self.repo, self.runtime = install_client(self, "inline")
+        self.url = "/api/v1/graphs/mathematics-demo/chat/diagnose"
+
+    def test_starts_topic_diagnostic_without_graph_progress(self):
+        before = self.repo.current().snapshot.id
+        response = self.client.post(self.url, json={"topic_id": "arithmetics"})
+        self.assertEqual(response.status_code, 200, response.text)
+        session = self.repo.chat_thread("mathematics-demo", response.json()["session_id"])
+        self.assertEqual(session.topic_id, "arithmetics")
+        self.assertEqual(self.repo.current().snapshot.id, before)
+
+    def test_rejects_unknown_topic_and_surfaces_model_failure(self):
+        self.assertEqual(self.client.post(self.url, json={"topic_id": "missing"}).status_code, 400)
+        self.runtime.start_diagnostic = AsyncMock(side_effect=ChatGPTError("usage", "ChatGPT plan limit reached"))
+        response = self.client.post(self.url, json={"topic_id": "arithmetics"})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"], "ChatGPT plan limit reached")

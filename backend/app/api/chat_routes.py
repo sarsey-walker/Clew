@@ -19,6 +19,12 @@ class CreateSessionRequest(BaseModel):
     title: str | None = None
 
 
+class DiagnosticSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    topic_id: str = Field(min_length=1)
+    model: str | None = Field(default=None, min_length=1)
+
+
 class AnswerRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str
@@ -71,6 +77,19 @@ def create_chat_session(graph_id: str, body: CreateSessionRequest, repository: G
         raise HTTPException(status_code=404, detail="Graph not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/graphs/{graph_id}/chat/diagnose")
+async def start_topic_diagnostic(graph_id: str, body: DiagnosticSessionRequest, runtime=Depends(get_agent_runtime)) -> dict:
+    try:
+        session_id, run_id = await runtime.start_diagnostic(graph_id, body.topic_id, body.model)
+        return {"session_id": session_id, "run_id": run_id}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Graph not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ChatGPTError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.delete("/api/v1/graphs/{graph_id}/chat/sessions/{session_id}")

@@ -16,11 +16,13 @@
   backdrop-filter: blur(24px);
   box-shadow: var(--ui-shadow-window);
   color: var(--ui-fg);
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-fill-3) transparent;
   animation: uiPopIn 0.18s var(--ui-ease);
 }
 
-.topicPopover::-webkit-scrollbar { display: none; }
+.topicPopover::-webkit-scrollbar { width: 6px; }
+.topicPopover::-webkit-scrollbar-thumb { border-radius: 6px; background: var(--ui-fill-3); }
 
 @keyframes uiPopIn {
   from { opacity: 0; transform: translateY(4px) scale(0.99); }
@@ -174,6 +176,18 @@
 }
 
 .topicPopoverInlineAddButton:hover { background: var(--ui-fill-2); color: var(--ui-fg); }
+
+.topicPopoverHistoryButton {
+  justify-self: start;
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--ui-fg-2);
+  font: 500 var(--ui-text-xs)/1.4 var(--sans);
+  cursor: pointer;
+}
+.topicPopoverHistoryButton:hover { color: var(--ui-fg); text-decoration: underline; }
+.topicPopoverHistoryButton:focus-visible { outline: 2px solid var(--ui-fg-2); outline-offset: 3px; }
 
 .topicPopoverResourceAddButton {
   display: inline-flex;

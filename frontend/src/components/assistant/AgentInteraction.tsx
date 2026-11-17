@@ -9,6 +9,7 @@ export type AgentControls = {
   authenticated: boolean;
   connect: () => void;
   openQuiz: (session: TopicQuizSession) => void;
+  openGraphPath: (topicId: string) => void;
 };
 export function AgentInteraction({ question, quiz, controls }: {
   question?: AgentQuestion | null; quiz?: InlineChatQuiz | null; controls: AgentControls;
@@ -43,6 +44,7 @@ export function AgentInteraction({ question, quiz, controls }: {
       <button className="agentQuestionSend" type="submit" aria-label="Send answer" disabled={busy || !value.trim()}>{busy ? "Sending…" : "Send"}</button>
     </form> : null}
     {question?.answer && !question.choices.includes(question.answer) ? <div className="inlineQuizNote">Your answer: {question.answer}</div> : null}
+    {answered && quiz?.explanation ? <div className="inlineQuizNote">{renderDisplayText(quiz.explanation)}</div> : null}
     {error ? <div className="inlineQuizNote inlineQuizNoteError" role="alert">{error}</div> : null}
   </div>;
 }

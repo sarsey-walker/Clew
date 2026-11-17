@@ -55,6 +55,7 @@ Tools are supplied as Responses API function tools on every request (`parallel_t
 | `propose_expand` | Validate a proposed learning-path expansion and show review |
 | `ask_question` | Show a persistent choice or free-text card and complete the reply |
 | `present_quiz` | Show a persistent four-choice checkpoint; grade its answer on the server |
+| `show_graph_path` | Show a card that selects a real topic and highlights its prerequisite path in the graph |
 | `create_closure_quiz` | Validate and register a full completion test; never award progress directly |
 | `present_review_prompt` | Supply a recall question and reference answer for the selected topic's review dialog |
 | `present_connection_prompt` | Supply a question and reference answer connecting two topics on a selected graph edge |
@@ -64,6 +65,12 @@ Proposal tools accept explicit topic, edge and zone operations. They reject unkn
 The existing completion-test button starts a separate ephemeral turn with only the read and closure-quiz tools. The model supplies exactly the requested questions; Clew retains correct answers and grades submissions. The existing manual Finish action keeps its explicit prerequisite-closure behavior.
 
 The topic review button starts a separate ephemeral turn with only `read_topic` and `present_review_prompt`. The model must read the selected topic before submitting a question and reference answer. An absent or invalid tool result fails explicitly; generating a prompt does not write a snapshot. After the learner compares their own answer, Clew records their self-rating and next due date in a reversible snapshot, separately from topic completion.
+
+A review snapshot also keeps the learner's question, answer, reference and self-rating. The topic card exposes this history. Fresh selected-topic context includes only the three latest attempts when that memory setting is enabled; graph exports without progress omit all review evidence.
+
+The Diagnose understanding action creates a topic-bound chat session with a visible session title and a hidden, explicit diagnostic request. The selected model uses the existing interactive checkpoint tool to probe one question at a time, adapting to each server-graded answer and ending with a study summary. The request asks for at most six checkpoints; it does not award completion or mutate the graph. Checkpoint contracts require a short explanation and direct the model to write plausible, parallel alternatives.
+
+For structural explanations, `show_graph_path` can place a card in the chat that opens a validated topic in the existing graph view. It uses Clew's actual prerequisite edges and creates no visual file or graph change.
 
 The topic connection action is available for existing graph edges. Its ephemeral turn exposes only `read_topic` and `present_connection_prompt`; the model must read both endpoints. Clew checks the edge id, graph version and endpoints before showing the question. The learner's comparison is a practice action and does not award progress or write a snapshot.
 

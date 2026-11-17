@@ -34,12 +34,23 @@ class ResourceLink(BaseModel):
     kind: str = "reference"
 
 
+class TopicReviewAttempt(BaseModel):
+    id: str
+    question: str
+    reference: str
+    answer: str
+    rating: Literal["again", "hard", "remembered"]
+    reviewed_at: datetime
+    due_at: datetime
+
+
 class TopicReviewState(BaseModel):
     last_reviewed_at: datetime | None = None
     due_at: datetime | None = None
     interval_days: int = 0
     streak: int = 0
     last_rating: Literal["again", "hard", "remembered"] | None = None
+    attempts: list[TopicReviewAttempt] = Field(default_factory=list)
 
 
 class Artifact(BaseModel):
@@ -341,6 +352,7 @@ class InlineChatQuiz(BaseModel):
     question: str
     choices: list[str]  # exactly 4
     correct_index: int  # 0-3
+    explanation: str = ""
     answered_index: int | None = None
     interaction_id: str | None = None
     status: Literal["pending", "answered", "interrupted"] = "pending"
@@ -361,6 +373,11 @@ class AgentActivity(BaseModel):
     detail: str = ""
 
 
+class GraphPathCard(BaseModel):
+    topic_id: str
+    topic_title: str
+
+
 class ChatMessage(BaseModel):
     id: str | None = None
     role: ChatRole
@@ -379,6 +396,7 @@ class ChatMessage(BaseModel):
     inline_quiz: InlineChatQuiz | None = None
     question: AgentQuestion | None = None
     closure_quiz: TopicQuizSessionPublic | None = None
+    graph_path: GraphPathCard | None = None
     activity: AgentActivity | None = None
     agent_status: Literal["streaming", "completed", "interrupted", "failed"] | None = None
 

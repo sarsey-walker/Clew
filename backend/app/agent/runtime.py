@@ -157,6 +157,30 @@ class AgentRuntime:
         run.task = asyncio.create_task(self._execute(run, thread.messages))
         return thread.session_id, run.id
 
+    async def start_diagnostic(self, graph_id: str, topic_id: str, model: str | None) -> tuple[str, str]:
+        graph = self.repository.graph(graph_id)
+        topic = next((item for item in graph.topics if item.id == topic_id), None)
+        if topic is None:
+            raise ValueError("The selected topic does not belong to this graph.")
+        if not topic.description.strip():
+            raise ValueError("This topic needs a description before diagnosing it.")
+        selected = await self._select_model(model)
+        session = self.repository.create_chat_session(graph_id, topic_id=topic_id, title=f"Diagnose · {topic.title}")
+        prompt = (
+            f"I chose to diagnose my understanding of {topic.title}. Use the graph and my recent review evidence "
+            "when available. Ask one low-stakes checkpoint at a time with present_quiz, starting near the "
+            "foundations and prerequisites. After each answer, adapt the next question to locate what I know "
+            "and where I get stuck. Probe a wrong answer before treating it as a stable misconception. "
+            "Ask at most six checkpoints. Stop earlier when you have enough evidence, or if I ask to stop. "
+            "Then summarize what I demonstrated, what remains uncertain, and a concrete next study step. "
+            "Explain any gap from a simple foundation and show why the next step follows. "
+            "This is practice: do not claim completion or change my graph."
+        )
+        return await self.start_chat(graph_id, GraphChatRequest(
+            prompt=prompt, session_id=session.session_id, selected_topic_id=topic_id,
+            hidden_user_message=True, model=selected,
+        ))
+
     async def generate_closure_quiz(self, graph_id: str, topic_id: str, question_count: int, model: str | None) -> TopicQuizSession:
         from app.services.quiz_service import QuizService
         graph = self.repository.graph(graph_id)
@@ -410,7 +434,8 @@ class AgentRuntime:
             quiz.answered_index = choice_index
             quiz.status = "answered"
             result = {"question": quiz.question, "selected_answer": quiz.choices[choice_index],
-                      "correct": choice_index == quiz.correct_index, "correct_answer": quiz.choices[quiz.correct_index]}
+                      "correct": choice_index == quiz.correct_index, "correct_answer": quiz.choices[quiz.correct_index],
+                      "explanation": quiz.explanation}
         else:
             question = message.question
             assert question is not None

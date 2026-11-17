@@ -11,7 +11,7 @@ const part = (id: string, patch: Partial<ChatMessage> = {}): ChatMessage => ({
 });
 function render(messages: ChatMessage[], status: GraphChatState["status"] = "completed", runId: string | null = "run") {
   return renderToStaticMarkup(<AssistantThread copy={APP_COPY}
-    agentControls={{ answer: async () => {}, stop: async () => {}, reconnect: () => {}, authenticated: true, connect: () => {}, openQuiz: () => {} }}
+    agentControls={{ answer: async () => {}, stop: async () => {}, reconnect: () => {}, authenticated: true, connect: () => {}, openQuiz: () => {}, openGraphPath: () => {} }}
     chatViewportRef={createRef()} chatComposerRef={createRef()} chatThreadLoading={false}
     currentChatState={{ messages, input: "", status, runId }} visibleMessages={messages}
     chatLoading={["starting", "running", "waiting"].includes(status!)} hasInlinePlanningWidget={false}
@@ -68,6 +68,13 @@ describe("nested assistant reply", () => {
     expect(html).toContain("assistantProgress");
     expect(html).not.toContain("proposalInlinePending");
     expect(html).not.toContain("Button request");
+  });
+
+  it("renders a graph path card with a direct graph action", () => {
+    const html = render([part("path", { graph_path: { topic_id: "algebra-basics", topic_title: "Algebra basics" } })]);
+    expect(html).toContain("Prerequisite path");
+    expect(html).toContain("Algebra basics");
+    expect(html).toContain("Show in graph");
   });
 
   it("keeps the same three-dot indicator before output, during text and during tools", () => {

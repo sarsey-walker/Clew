@@ -64,7 +64,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request["model"], "test-model")
         self.assertNotIn("reasoning", request)
         self.assertEqual({tool["name"] for tool in request["tools"] if tool["type"] == "function"},
-                         {"read_graph", "read_topic", "propose_ingest", "propose_expand", "ask_question", "present_quiz", "create_closure_quiz"})
+                         {"read_graph", "read_topic", "propose_ingest", "propose_expand", "ask_question", "present_quiz", "show_graph_path", "create_closure_quiz"})
         # Web search is always offered in chat; the model decides whether to use it.
         self.assertIn({"type": "web_search"}, request["tools"])
 
@@ -122,6 +122,28 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(messages[1].inline_quiz.answered_index, 0)
         self.assertIn('"correct": false', messages[-1].content)
         self.assertEqual(self.repo.graph(self.graph_id).quiz_attempts, [])
+
+    async def test_diagnostic_starts_a_topic_chat_without_awarding_completion(self):
+        self.peer.scenario = "inline"
+        before = self.repo.current().snapshot.id
+        session_id, run_id = await self.runtime.start_diagnostic(self.graph_id, "arithmetics", None)
+        await self.complete(self.runtime.runs[run_id])
+        thread = self.repo.chat_thread(self.graph_id, session_id)
+        self.assertEqual(thread.topic_id, "arithmetics")
+        self.assertTrue(thread.messages[0].hidden)
+        self.assertIn("at most six checkpoints", thread.messages[0].content)
+        self.assertIsNotNone(next((message.inline_quiz for message in thread.messages if message.inline_quiz), None))
+        self.assertEqual(self.repo.current().snapshot.id, before)
+
+    async def test_graph_path_card_points_only_to_an_existing_topic(self):
+        before = self.repo.current().snapshot.id
+        sid, run = await self.start("graph-path")
+        await self.complete(run)
+        thread = self.repo.chat_thread(self.graph_id, sid)
+        card = next((message.graph_path for message in thread.messages if message.graph_path), None)
+        self.assertIsNotNone(card)
+        self.assertEqual(card.topic_id, "algebra-basics")
+        self.assertEqual(self.repo.current().snapshot.id, before)
 
     async def test_proposal_tool_does_not_mutate_graph(self):
         before = self.repo.current().snapshot.id

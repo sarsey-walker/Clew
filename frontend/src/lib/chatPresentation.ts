@@ -33,7 +33,7 @@ export function presentChatReply(reply: ChatReply, active: boolean, waiting: boo
   const progressLabel = activeTool && ["propose_ingest", "propose_expand", "create_closure_quiz"].includes(activeTool.tool)
     ? activeTool.detail : "Working…";
   const cards = reply.messages.filter((message) =>
-    message.proposal || message.question || message.inline_quiz || message.closure_quiz
+    message.proposal || message.question || message.inline_quiz || message.closure_quiz || message.graph_path
     || message.planning_status || message.planning_error || message.activity?.status === "failed",
   );
   return {

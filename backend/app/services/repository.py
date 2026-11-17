@@ -10,8 +10,8 @@ from typing import Iterator
 import re
 import uuid
 
-from app.models.api import GraphExportPackage, ObsidianExportOptions, ObsidianGraphExportPackage
-from app.models.domain import Artifact, ChatMessage, CreateGraphRequest, Edge, GraphChatThread, GraphProposal, GraphSummary, PatchOperation, QuizAttempt, ResourceLink, TopicQuizSession, SnapshotRecord, StudyGraph, Topic, TopicReviewState, UpdateWorkspaceConfigRequest, WorkspaceDocument, WorkspaceEnvelope, Zone
+from app.models.api import GraphExportPackage, ObsidianExportOptions, ObsidianGraphExportPackage, TopicReviewInput
+from app.models.domain import Artifact, ChatMessage, CreateGraphRequest, Edge, GraphChatThread, GraphProposal, GraphSummary, PatchOperation, QuizAttempt, ResourceLink, TopicQuizSession, SnapshotRecord, StudyGraph, Topic, TopicReviewAttempt, TopicReviewState, UpdateWorkspaceConfigRequest, WorkspaceDocument, WorkspaceEnvelope, Zone
 from app.services.obsidian_export import build_obsidian_export_package
 from app.services.repository_config import apply_workspace_config_update
 from app.services.proposal_validator import prerequisites_are_acyclic
@@ -817,7 +817,7 @@ class GraphRepository:
             )
         return self.snapshot(snapshot_id)
 
-    def record_topic_review(self, graph_id: str, topic_id: str, rating: str) -> WorkspaceEnvelope:
+    def record_topic_review(self, graph_id: str, topic_id: str, review: TopicReviewInput) -> WorkspaceEnvelope:
         current = self.current()
         workspace = WorkspaceDocument.model_validate(deepcopy(current.workspace.model_dump()))
         graph = next((item for item in workspace.graphs if item.graph_id == graph_id), None)
@@ -828,6 +828,9 @@ class GraphRepository:
             raise ValueError(f"topic {topic_id} not found")
         if not topic.description.strip():
             raise ValueError("This topic needs a description before it can be reviewed")
+        if not review.question.strip() or not review.reference.strip() or not review.answer.strip():
+            raise ValueError("A review needs a question, reference, and learner answer")
+        rating = review.rating
         if rating == "again":
             interval_days, streak = 1, 0
         elif rating == "hard":
@@ -838,11 +841,21 @@ class GraphRepository:
         else:
             raise ValueError("invalid review rating")
         now = datetime.now(timezone.utc)
+        due_at = now + timedelta(days=interval_days)
         topic.review.last_reviewed_at = now
-        topic.review.due_at = now + timedelta(days=interval_days)
+        topic.review.due_at = due_at
         topic.review.interval_days = interval_days
         topic.review.streak = streak
         topic.review.last_rating = rating
+        topic.review.attempts.append(TopicReviewAttempt(
+            id=f"review-{uuid.uuid4().hex}",
+            question=review.question.strip(),
+            reference=review.reference.strip(),
+            answer=review.answer.strip(),
+            rating=rating,
+            reviewed_at=now,
+            due_at=due_at,
+        ))
         with self._connect() as conn:
             snapshot_id = self._insert_snapshot(conn, workspace, source="topic.review", reason=f"review {topic.title}", parent_snapshot_id=current.snapshot.id)
         return self.snapshot(snapshot_id)

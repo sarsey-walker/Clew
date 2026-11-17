@@ -253,7 +253,7 @@ def record_topic_review(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     try:
-        workspace = repository.record_topic_review(graph_id, topic_id, body.rating)
+        workspace = repository.record_topic_review(graph_id, topic_id, body)
     except ValueError as exc:
         message = str(exc)
         raise HTTPException(status_code=404 if "not found" in message else 400, detail=message) from exc

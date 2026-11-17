@@ -4,8 +4,8 @@ import json
 from typing import TYPE_CHECKING
 
 from app.agent.context import graph_context
-from app.agent.contracts import CLOSURE_QUIZ_TOOLS, CONNECTION_PROMPT_TOOLS, REVIEW_PROMPT_TOOLS, TOOL_MODELS, ClosureQuizDraft, ConnectionPromptDraft, InlineQuizDraft, ProposalDraft, QuestionDraft, ReviewPromptDraft
-from app.models.domain import AgentActivity, AgentQuestion, ChatMessage, InlineChatQuiz, QuizQuestion, TopicQuizSessionPublic
+from app.agent.contracts import CLOSURE_QUIZ_TOOLS, CONNECTION_PROMPT_TOOLS, REVIEW_PROMPT_TOOLS, TOOL_MODELS, ClosureQuizDraft, ConnectionPromptDraft, GraphPathDraft, InlineQuizDraft, ProposalDraft, QuestionDraft, ReviewPromptDraft
+from app.models.domain import AgentActivity, AgentQuestion, ChatMessage, GraphPathCard, InlineChatQuiz, QuizQuestion, TopicQuizSessionPublic
 from app.services.proposal_service import ProposalService
 from app.services.quiz_service import QuizService
 
@@ -20,6 +20,7 @@ LABELS = {
     "propose_expand": "Preparing a graph proposal",
     "ask_question": "Waiting for your answer",
     "present_quiz": "Waiting for your answer",
+    "show_graph_path": "Showing a graph path",
     "create_closure_quiz": "Preparing your test",
     "present_review_prompt": "Preparing your review question",
     "present_connection_prompt": "Preparing a connection question",
@@ -101,6 +102,14 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
                 raise ValueError("A connection question has already been prepared for this turn.")
             run.connection_prompt = {"question": parsed.question, "reference": parsed.reference}
             result = {"status": "ready", "message": "The connection question is ready in Clew."}
+        elif tool == "show_graph_path":
+            assert isinstance(parsed, GraphPathDraft)
+            topic = next((item for item in graph.topics if item.id == parsed.topic_id), None)
+            if topic is None:
+                raise ValueError("The graph path topic does not exist in this graph.")
+            message.graph_path = GraphPathCard(topic_id=topic.id, topic_title=topic.title)
+            result = {"status": "ready", "topic_id": topic.id,
+                      "message": "The path card is visible in Clew. The learner opens it when ready."}
         elif tool in {"propose_ingest", "propose_expand"}:
             assert isinstance(parsed, ProposalDraft)
             proposal = ProposalService().prepare(graph, parsed, tool=tool, proposal_id=f"prop-{call_id}",
@@ -117,7 +126,8 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
             else:
                 assert isinstance(parsed, InlineQuizDraft)
                 message.inline_quiz = InlineChatQuiz(interaction_id=interaction_id, question=parsed.question,
-                                                     choices=parsed.choices, correct_index=parsed.correct_index)
+                                                     choices=parsed.choices, correct_index=parsed.correct_index,
+                                                     explanation=parsed.explanation)
             run.awaiting_answer = True
             result = {"status": "awaiting_answer", "interaction_id": interaction_id,
                       "message": "The card is ready. Clew will send the learner's answer in a separate turn."}

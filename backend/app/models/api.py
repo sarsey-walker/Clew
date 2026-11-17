@@ -32,6 +32,9 @@ class UpdateTopicResourceInput(BaseModel):
 
 class TopicReviewInput(BaseModel):
     rating: Literal["again", "hard", "remembered"]
+    question: str = Field(min_length=15, max_length=2000)
+    reference: str = Field(min_length=15, max_length=4000)
+    answer: str = Field(min_length=1, max_length=12000)
 
 
 class TopicReviewPromptRequest(BaseModel):

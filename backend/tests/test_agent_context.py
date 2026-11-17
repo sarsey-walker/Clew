@@ -2,13 +2,25 @@ from __future__ import annotations
 
 import json
 import unittest
+from datetime import datetime, timezone
 
 from app.agent.context import turn_context
-from app.models.domain import Edge, StudyGraph, Topic, WorkspaceConfig, Zone
+from app.models.domain import Edge, StudyGraph, Topic, TopicReviewAttempt, WorkspaceConfig, Zone
 from app.services.repository import GraphRepository
 
 
 class AgentContextTests(unittest.TestCase):
+    def test_selected_topic_context_keeps_only_recent_review_evidence(self):
+        now = datetime.now(timezone.utc)
+        topic = Topic(id="a", title="A", slug="a", description="A topic")
+        topic.review.attempts = [TopicReviewAttempt(id=str(index), question="Question", reference="Reference",
+            answer=f"Answer {index}", rating="remembered", reviewed_at=now, due_at=now) for index in range(5)]
+        graph = StudyGraph(graph_id="g", subject="test", title="Test", topics=[topic])
+        payload = json.loads(turn_context(graph, WorkspaceConfig(), "a", []).split("\n", 1)[1])
+        self.assertEqual([item["id"] for item in payload["selected_topic"]["review"]["attempts"]], ["2", "3", "4"])
+        private = json.loads(turn_context(graph, WorkspaceConfig(memory_include_selected_topic_context=False), "a", []).split("\n", 1)[1])
+        self.assertNotIn("selected_topic", private)
+
     def test_frontier_preserves_order_and_only_requires_closed_parents(self):
         names = ("closed", "ready", "blocked", "supported", "root")
         graph = StudyGraph(graph_id="g", subject="test", title="Test",

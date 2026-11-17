@@ -97,6 +97,15 @@ export function AssistantThread({
                     <button className="proposalOpenButton" type="button" onClick={() => agentControls.openQuiz(message.closure_quiz!)}>Open test</button>
                   </div>
                 </div> : null}
+                {message.graph_path ? <div className="proposalInlineCard">
+                  <div className="proposalInlineHead">
+                    <div>
+                      <div className="proposalInlineTitle">{copy.sessions.graphPathTitle}</div>
+                      <div className="proposalInlineNote">{message.graph_path.topic_title}</div>
+                    </div>
+                    <button className="proposalOpenButton" type="button" onClick={() => agentControls.openGraphPath(message.graph_path!.topic_id)}>{copy.sessions.openGraphPath}</button>
+                  </div>
+                </div> : null}
                 {message.planning_status ? (
                   <AssistantProgress label={message.planning_status} />
                 ) : null}

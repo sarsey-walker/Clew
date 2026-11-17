@@ -31,7 +31,7 @@ import { AssistantThread } from "./assistant/AssistantThread";
 import { TopStatsOverlay } from "./TopStatsOverlay";
 import { ClewLogo } from "./ClewLogo";
 import { TopicResourcesSection } from "./TopicResourcesSection";
-import { TopicReviewDialog } from "./TopicReviewDialog";
+import { TopicReviewDialog, TopicReviewHistoryDialog } from "./TopicReviewDialog";
 import { TopicConnectionDialog } from "./TopicConnectionDialog";
 import type { GraphViewMode } from "./WorkspaceShellOverlayControls";
 import type {
@@ -176,6 +176,7 @@ type GraphWorkspaceProps = {
   selectedTopicId: string | null;
   graphLayoutDraft: ManualLayoutPositions | null;
   activeGraphManualLayout: ManualLayoutPositions | null;
+  graphFocusRequest: { topicId: string; nonce: number } | null;
   liveDisableIdleAnimations: boolean;
   showGraphLoadingState: boolean;
   showGraphEmptyState: boolean;
@@ -186,9 +187,10 @@ type TopicDetailsProps = {
   addTopicResource: (topicId: string, label: string, url: string) => Promise<void>;
   updateTopicResource: (topicId: string, resourceId: string, label: string, url: string) => Promise<void>;
   deleteTopicResource: (topicId: string, resourceId: string) => Promise<void>;
-  recordTopicReview: (topicId: string, rating: "again" | "hard" | "remembered") => Promise<void>;
+  recordTopicReview: (topicId: string, rating: "again" | "hard" | "remembered", answer: string, prompt: TopicReviewPrompt) => Promise<void>;
   generateTopicReviewPrompt: (topicId: string) => Promise<TopicReviewPrompt>;
   generateTopicConnectionPrompt: (topicId: string, edgeId: string) => Promise<TopicReviewPrompt>;
+  startTopicDiagnosis: (topicId: string) => Promise<void>;
   addTopicArtifact: (topicId: string, title: string, body: string) => Promise<void>;
   selectedTopic: Topic | null;
   selectedTopicAnchor: TopicAnchorPoint | null;
@@ -333,6 +335,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     selectedTopicId,
     graphLayoutDraft,
     activeGraphManualLayout,
+    graphFocusRequest,
     liveDisableIdleAnimations,
     showGraphLoadingState,
     showGraphEmptyState,
@@ -345,6 +348,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     recordTopicReview,
     generateTopicReviewPrompt,
     generateTopicConnectionPrompt,
+    startTopicDiagnosis,
     addTopicArtifact,
     selectedTopic,
     selectedTopicAnchor,
@@ -487,6 +491,11 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const [reviewSaving, setReviewSaving] = React.useState(false);
   const [reviewError, setReviewError] = React.useState<string | null>(null);
   const reviewModalRef = React.useRef<HTMLDivElement | null>(null);
+  const [reviewHistoryOpen, setReviewHistoryOpen] = React.useState(false);
+  const reviewHistoryModalRef = React.useRef<HTMLDivElement | null>(null);
+  const [diagnosisLoading, setDiagnosisLoading] = React.useState(false);
+  const [diagnosisError, setDiagnosisError] = React.useState<string | null>(null);
+  const diagnosisPendingRef = React.useRef(false);
   const [connectionEdgeIdDraft, setConnectionEdgeIdDraft] = React.useState("");
   const [connectionPrompt, setConnectionPrompt] = React.useState<TopicReviewPrompt | null>(null);
   const [connectionTopicTitles, setConnectionTopicTitles] = React.useState<[string, string] | null>(null);
@@ -531,6 +540,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     setConnectionError(null);
   }, []);
   useModalAccessibility({ isOpen: reviewOpen, modalRef: reviewModalRef, onClose: closeReviewModal });
+  useModalAccessibility({ isOpen: reviewHistoryOpen, modalRef: reviewHistoryModalRef, onClose: () => setReviewHistoryOpen(false) });
   useModalAccessibility({ isOpen: Boolean(connectionPrompt), modalRef: connectionModalRef, onClose: closeConnectionModal });
   useModalAccessibility({
     isOpen: Boolean(topicAssetDialog),
@@ -541,6 +551,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   React.useEffect(() => {
     closeTopicAssetModal();
     closeReviewModal();
+    setReviewHistoryOpen(false);
+    setDiagnosisError(null);
     closeConnectionModal();
     setConnectionEdgeIdDraft("");
     setResourceDeleteTarget(null);
@@ -879,11 +891,11 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   }
 
   async function submitTopicReview(rating: "again" | "hard" | "remembered"): Promise<void> {
-    if (!selectedTopic || !reviewRevealed) return;
+    if (!selectedTopic || !reviewPrompt || !reviewAnswer.trim() || !reviewRevealed) return;
     setReviewSaving(true);
     setReviewError(null);
     try {
-      await recordTopicReview(selectedTopic.id, rating);
+      await recordTopicReview(selectedTopic.id, rating, reviewAnswer, reviewPrompt);
       closeReviewModal();
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : copy.topic.reviewError);
@@ -927,6 +939,21 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
       setConnectionError(error instanceof Error ? error.message : copy.topic.connectionError);
     } finally {
       if (requestId === connectionRequestRef.current) setConnectionLoading(false);
+    }
+  }
+
+  async function beginTopicDiagnosis(topicId: string): Promise<void> {
+    if (diagnosisPendingRef.current) return;
+    diagnosisPendingRef.current = true;
+    setDiagnosisLoading(true);
+    setDiagnosisError(null);
+    try {
+      await startTopicDiagnosis(topicId);
+    } catch (error) {
+      setDiagnosisError(error instanceof Error ? error.message : copy.topic.diagnosisError);
+    } finally {
+      diagnosisPendingRef.current = false;
+      setDiagnosisLoading(false);
     }
   }
 
@@ -1391,6 +1418,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                       onSelectTopic={handleSelectTopic}
                       onSelectedTopicAnchorChange={handleSelectedTopicAnchorChange}
                       themeMode={themeMode}
+                      focusRequest={graphFocusRequest}
                     />
                   </React.Suspense>
                 ) : activeGraph ? (
@@ -1409,6 +1437,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                     onSelectedTopicAnchorChange={handleSelectedTopicAnchorChange}
                     graphCacheKey={`graph:${activeGraph.graph_id}`}
                     initialZoom={0.45}
+                    centerOnNodeId={graphFocusRequest?.topicId ?? null}
+                    centerOnRequestId={graphFocusRequest?.nonce}
                     nodePositions={graphLayoutEditing ? graphLayoutDraft : activeGraphManualLayout}
                     layoutEditMode={graphLayoutEditing}
                     onNodePositionsChange={setGraphLayoutDraft}
@@ -1574,6 +1604,13 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                       {!selectedTopic.description.trim() ? <div className="topicPopoverEmpty">{copy.topic.reviewUnavailable}</div> : null}
                       {reviewPromptError ? <div className="inlineNotice inlineNoticeError">{reviewPromptError}</div> : null}
                       <button className="topicPopoverPrimary" type="button" disabled={!selectedTopic.description.trim() || reviewLoading} onClick={() => void startTopicReview(selectedTopic.id)}>{reviewLoading ? copy.topic.reviewPreparing : copy.topic.review}</button>
+                      {selectedTopic.review?.attempts.length ? <button className="topicPopoverHistoryButton" type="button" onClick={() => setReviewHistoryOpen(true)}>{copy.topic.reviewHistoryCount(selectedTopic.review.attempts.length)}</button> : null}
+                    </div>
+                    <div className="topicPopoverSection">
+                      <div className="topicPopoverLabel">{copy.topic.diagnosis}</div>
+                      <div className="topicPopoverCopy">{copy.topic.diagnosisDescription}</div>
+                      {diagnosisError ? <div className="inlineNotice inlineNoticeError">{diagnosisError}</div> : null}
+                      <button className="topicPopoverPrimary" type="button" disabled={!selectedTopic.description.trim() || diagnosisLoading} onClick={() => void beginTopicDiagnosis(selectedTopic.id)}>{diagnosisLoading ? copy.topic.diagnosisStarting : copy.topic.diagnosisStart}</button>
                     </div>
                     <div className="topicPopoverSection">
                       <div className="topicPopoverLabel">{copy.topic.connectionPractice}</div>
@@ -1859,6 +1896,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
         close={closeReviewModal}
         rate={(rating) => void submitTopicReview(rating)}
       />
+      <TopicReviewHistoryDialog topic={selectedTopic} open={reviewHistoryOpen} modalRef={reviewHistoryModalRef} copy={copy} close={() => setReviewHistoryOpen(false)} />
       <TopicConnectionDialog
         prompt={connectionPrompt}
         topicTitles={connectionTopicTitles}

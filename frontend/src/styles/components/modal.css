@@ -113,6 +113,10 @@
   width: 100%;
 }
 
+.reviewHistoryEntry { display: grid; gap: 14px; padding: 16px 0; border-top: 1px solid var(--ui-line); }
+.reviewHistoryEntry:first-child { padding-top: 0; border-top: 0; }
+.reviewHistoryMeta { color: var(--ui-fg-3); font-size: var(--ui-text-xs); }
+
 .uiMono { font-family: var(--mono); overflow-wrap: anywhere; }
 
 .uiFieldPair {

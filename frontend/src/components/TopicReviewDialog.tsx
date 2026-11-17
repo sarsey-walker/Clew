@@ -61,3 +61,32 @@ export function TopicReviewDialog({
     </Modal>
   );
 }
+
+export function TopicReviewHistoryDialog({ topic, open, modalRef, copy, close }: {
+  topic: Topic | null;
+  open: boolean;
+  modalRef: React.RefObject<HTMLDivElement | null>;
+  copy: AppCopy;
+  close: () => void;
+}): React.JSX.Element | null {
+  if (!open || !topic) return null;
+  const ratings = {
+    again: copy.topic.reviewAgain,
+    hard: copy.topic.reviewHard,
+    remembered: copy.topic.reviewRemembered,
+  };
+  return (
+    <Modal id="topic-review-history" modalRef={modalRef} title={copy.topic.reviewHistory} description={topic.title}
+      closeLabel={copy.dialogs.cancel} onClose={close}
+      footer={<button className="uiButton uiButtonPrimary" type="button" onClick={close}>{copy.topic.connectionDone}</button>}>
+      {[...(topic.review?.attempts ?? [])].reverse().map((attempt) => (
+        <article className="reviewHistoryEntry" key={attempt.id}>
+          <div className="reviewHistoryMeta">{new Date(attempt.reviewed_at).toLocaleString()} · {ratings[attempt.rating]}</div>
+          <div className="uiField"><span className="uiLabel">{copy.topic.reviewQuestionLabel}</span><div className="topicPopoverCopy">{renderDisplayText(attempt.question)}</div></div>
+          <div className="uiField"><span className="uiLabel">{copy.topic.reviewAnswer}</span><div className="topicPopoverCopy">{renderDisplayText(attempt.answer)}</div></div>
+          <div className="uiField"><span className="uiLabel">{copy.topic.connectionReference}</span><div className="topicPopoverCopy">{renderDisplayText(attempt.reference)}</div></div>
+        </article>
+      ))}
+    </Modal>
+  );
+}

@@ -38,6 +38,15 @@ export type Topic = {
     interval_days: number;
     streak: number;
     last_rating: "again" | "hard" | "remembered" | null;
+    attempts: Array<{
+      id: string;
+      question: string;
+      reference: string;
+      answer: string;
+      rating: "again" | "hard" | "remembered";
+      reviewed_at: string;
+      due_at: string;
+    }>;
   };
   artifacts: Artifact[];
   metadata?: Record<string, unknown>;
@@ -146,6 +155,7 @@ export type InlineChatQuiz = {
   question: string;
   choices: string[];
   correct_index: number;
+  explanation?: string;
   answered_index?: number | null;
   interaction_id?: string | null;
   status?: "pending" | "answered" | "interrupted";
@@ -169,6 +179,7 @@ export type ChatMessage = {
   inline_quiz?: InlineChatQuiz | null;
   question?: AgentQuestion | null;
   closure_quiz?: TopicQuizSession | null;
+  graph_path?: { topic_id: string; topic_title: string } | null;
   activity?: { id: string; tool: string; status: "running" | "completed" | "failed"; detail: string } | null;
   agent_status?: "streaming" | "completed" | "interrupted" | "failed" | null;
 };

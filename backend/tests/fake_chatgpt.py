@@ -195,7 +195,9 @@ class FakeChatGPT:
         if scenario == "question":
             return self._complete([], [self._call("ask_question", {"question": "Which part should we explore?", "choices": ["Theory", "Practice"]})])
         if scenario == "inline":
-            return self._complete([], [self._call("present_quiz", {"question": "What is 2 + 2?", "choices": ["3", "4", "5", "6"], "correct_index": 1})])
+            return self._complete([], [self._call("present_quiz", {"question": "What is 2 + 2?", "choices": ["3", "4", "5", "6"], "correct_index": 1, "explanation": "Adding two groups of two gives four."})])
+        if scenario == "graph-path":
+            return self._complete([], [self._call("show_graph_path", {"topic_id": "algebra-basics"})])
         if scenario == "review":
             return self._complete([], [self._call("read_topic", {"topic_id": context["selected_topic_id"]})])
         if scenario == "review-no-tool":

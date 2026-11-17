@@ -90,6 +90,7 @@ class InlineQuizDraft(ToolInput):
     question: str = Field(min_length=1)
     choices: list[str]
     correct_index: int
+    explanation: str = Field(min_length=1, max_length=2000)
 
     @model_validator(mode="after")
     def _validate_shape(self) -> "InlineQuizDraft":
@@ -106,7 +107,7 @@ class QuizQuestionDraft(ToolInput):
     prompt: str = Field(min_length=1)
     choices: list[str]
     correct_choice_index: int
-    explanation: str = ""
+    explanation: str = Field(min_length=1, max_length=2000)
 
     @model_validator(mode="after")
     def _validate_shape(self) -> "QuizQuestionDraft":
@@ -127,6 +128,10 @@ class QuestionDraft(ToolInput):
     model_config = {"extra": "forbid"}
     question: str = Field(min_length=1, max_length=4000)
     choices: list[str] = Field(default_factory=list, max_length=6)
+
+
+class GraphPathDraft(ToolInput):
+    topic_id: str = Field(min_length=1)
 
 
 class ClosureQuizDraft(QuizQuestionSetDraft):
@@ -151,6 +156,7 @@ TOOL_MODELS = {
     "propose_expand": ProposalDraft,
     "ask_question": QuestionDraft,
     "present_quiz": InlineQuizDraft,
+    "show_graph_path": GraphPathDraft,
     "create_closure_quiz": ClosureQuizDraft,
     "present_review_prompt": ReviewPromptDraft,
     "present_connection_prompt": ConnectionPromptDraft,
@@ -168,7 +174,8 @@ def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
         "propose_ingest": "Submit graph operations that preserve the supplied source material. Clew validates and presents them for user review; this does not apply changes. Omitted descriptive metadata is preserved on existing topics. Read the current graph version first.",
         "propose_expand": "Submit graph operations that extend the learning path toward the user's goal. Clew validates and presents them for user review; this does not apply changes. Omitted descriptive metadata is preserved on existing topics. Read the current graph version first.",
         "ask_question": "Show a focused question, optionally with choices and free-text replies. Ends this reply; the learner's answer arrives from Clew in a new turn.",
-        "present_quiz": "Show one multiple-choice learning checkpoint with exactly four distinct choices. Ends this reply; Clew sends the server-graded answer in a new turn. Does not award topic completion.",
+        "present_quiz": "Show one multiple-choice learning checkpoint with exactly four distinct choices and a concise explanation. Use plausible misconceptions as distractors, with parallel wording and no answer-revealing cues. Ends this reply; Clew sends the server-graded answer in a new turn. Does not award topic completion.",
+        "show_graph_path": "Show a card that opens an existing topic and highlights its prerequisite path in the learner's graph. Use when the relationship or dependency is clearer in the graph. This does not change the graph.",
         "create_closure_quiz": "Register a complete closure quiz for a topic. Supply the requested number of questions with four distinct choices each. Clew checks prerequisites and grades the learner's answers itself.",
         "present_review_prompt": "Prepare one open recall question for the requested topic and a concise reference answer. Clew validates and shows both in the topic review dialog; this does not change graph progress.",
         "present_connection_prompt": "Prepare one open question that makes the learner connect the two topics on the requested graph edge, plus a concise reference answer. Clew validates and shows both without changing graph progress.",
