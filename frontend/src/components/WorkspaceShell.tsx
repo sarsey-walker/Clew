@@ -11,7 +11,6 @@ import {
   computeCanonicalLightDesktopLayout,
   makeFloatingRect,
   readStoredLightDesktopLayout,
-  toFloatingRect,
   type FloatingRect,
   type FloatingWindowDragTarget,
   type FloatingWindowPosition,
@@ -590,13 +589,23 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
       };
       const blockedRects: FloatingRect[] = [];
 
-      // Only visible stat chips block floating-window drag targets.
+      // Only the visible portion of the status strip blocks floating windows.
       const statsContainer = floatingStatsRef.current;
       if (statsContainer) {
+        const visibleRect = statsContainer.getBoundingClientRect();
         for (const child of Array.from(statsContainer.children) as HTMLElement[]) {
           const rect = child.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            blockedRects.push(toFloatingRect(drag.shellRect, rect));
+          const left = Math.max(rect.left, visibleRect.left);
+          const right = Math.min(rect.right, visibleRect.right);
+          const top = Math.max(rect.top, visibleRect.top);
+          const bottom = Math.min(rect.bottom, visibleRect.bottom);
+          if (right > left && bottom > top) {
+            blockedRects.push({
+              x: left - drag.shellRect.left,
+              y: top - drag.shellRect.top,
+              width: right - left,
+              height: bottom - top,
+            });
           }
         }
       }

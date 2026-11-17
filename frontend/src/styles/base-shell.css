@@ -364,10 +364,6 @@ body {
   pointer-events: none;
 }
 
-.topOverlayStack > * {
-  pointer-events: auto;
-}
-
 .floatingStatsContainerStacked {
   position: static;
   left: auto !important;
@@ -410,16 +406,13 @@ body {
   pointer-events: none;
 }
 
-.topOverlayInline > * {
-  pointer-events: auto;
-}
-
 .topOverlayInline .floatingStatsContainerStacked {
-  width: 0;
-  flex: 1 1 0;
+  width: max-content;
+  flex: 0 1 auto;
 }
 
 .topOverlayInline .floatingStatusContainerCompact {
+  margin-left: auto;
   align-self: flex-start;
   display: flex;
   justify-content: flex-end;
