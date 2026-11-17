@@ -92,6 +92,16 @@ export const APP_COPY = {
     deleteGraph: (title: string) => `Delete ${title}`,
   },
   graphStats: {
+    studyNext: "Study next",
+    studyNextAria: (title: string, reason: string) => `Study next: ${title}. ${reason}.`,
+    studyNextReasons: {
+      due_review: "Review due",
+      needs_practice: "Needs practice",
+      continue_learning: "Continue",
+      ready_to_start: "Ready to start",
+      early_review: "Review early",
+    },
+    allCaughtUp: "All caught up",
     snapshot: (id: number) => `Snapshot ${id}`,
     saving: "Saving",
     newGraph: "+ New",

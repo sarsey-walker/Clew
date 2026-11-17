@@ -650,6 +650,28 @@
 .statSegWarn strong { color: var(--ui-warn); }
 .statSegQuiet { color: var(--ui-fg-3); font-weight: 500; }
 
+.statSegNext {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ui-fg);
+}
+
+.statSegNext:hover,
+.statSegNext:focus-visible { background: var(--ui-fill-1); }
+.statSegNext:focus-visible { outline: 2px solid var(--ui-fg-2); outline-offset: -2px; border-radius: var(--ui-radius-pill); }
+.statSegNext .statSegLabel { color: var(--ui-fg-2); }
+.statSegNextReason { color: var(--ui-fg-2); }
+.statSegNextDue .statSegNextReason { color: var(--ui-warn); }
+.statSegNext strong {
+  display: inline-block;
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sans);
+}
+
 /* Assessment cards put the label first; their value is text, not a number. */
 .statSeg > .statSegLabel:first-child + strong {
   font-family: var(--sans);

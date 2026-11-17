@@ -2,6 +2,7 @@ import React from "react";
 import { Cube, Graph, LockSimple, LockSimpleOpen, Moon, PencilSimple, SunDim, X } from "@phosphor-icons/react";
 
 import type { AppCopy } from "../lib/appCopy";
+import type { StudyNextRecommendation } from "../lib/graph";
 import type { GraphAssessment, WorkspaceEnvelope, GraphEnvelope } from "../lib/types";
 
 type GraphSummary = {
@@ -16,6 +17,8 @@ export type GraphViewMode = "2d" | "3d";
 export function GraphStatItems({
   activeGraph,
   graphSummary,
+  studyNext,
+  onSelectStudyNext,
   copy,
   activeAssessmentCards,
   data,
@@ -28,6 +31,8 @@ export function GraphStatItems({
 }: {
   activeGraph: GraphEnvelope | null;
   graphSummary: GraphSummary;
+  studyNext: StudyNextRecommendation | null;
+  onSelectStudyNext: () => void;
   copy: AppCopy;
   activeAssessmentCards: GraphAssessment["cards"];
   data: WorkspaceEnvelope | null;
@@ -53,6 +58,19 @@ export function GraphStatItems({
     <>
       <div className="statStrip">
         {activeGraph ? <span className="statSeg statSegLang">{activeGraph.language.toUpperCase()}</span> : null}
+        {studyNext ? (
+          <button
+            className={`statSeg statSegNext ${studyNext.reason === "due_review" ? "statSegNextDue" : ""}`}
+            type="button"
+            onClick={onSelectStudyNext}
+            aria-label={copy.graphStats.studyNextAria(studyNext.topic.title, copy.graphStats.studyNextReasons[studyNext.reason])}
+            title={copy.graphStats.studyNextAria(studyNext.topic.title, copy.graphStats.studyNextReasons[studyNext.reason])}
+          >
+            <span className="statSegLabel">{copy.graphStats.studyNext}</span>
+            <span className="statSegNextReason">{copy.graphStats.studyNextReasons[studyNext.reason]}</span>
+            <strong>{studyNext.topic.title}</strong>
+          </button>
+        ) : activeGraph?.topics.length ? <span className="statSeg statSegQuiet">{copy.graphStats.allCaughtUp}</span> : null}
         <span className="statSeg">
           <strong>{graphSummary.topicCount}</strong>
           <span className="statSegLabel">{copy.graphStats.topics}</span>

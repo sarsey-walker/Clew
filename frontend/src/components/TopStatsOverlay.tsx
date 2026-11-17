@@ -1,6 +1,7 @@
 import React from "react";
 
 import type { AppCopy } from "../lib/appCopy";
+import type { StudyNextRecommendation } from "../lib/graph";
 import type { GraphAssessment, GraphEnvelope, WorkspaceEnvelope } from "../lib/types";
 import { GraphStatItems, OverlayControls, type GraphViewMode } from "./WorkspaceShellOverlayControls";
 
@@ -18,6 +19,8 @@ export type TopStatsOverlayProps = {
   floatingStatsRef: React.RefObject<HTMLDivElement | null>;
   activeGraph: GraphEnvelope | null;
   graphSummary: GraphSummary;
+  studyNext: StudyNextRecommendation | null;
+  onSelectStudyNext: () => void;
   copy: AppCopy;
   activeAssessmentCards: GraphAssessment["cards"];
   data: WorkspaceEnvelope | null;
@@ -55,6 +58,8 @@ export function TopStatsOverlay({
   floatingStatsRef,
   activeGraph,
   graphSummary,
+  studyNext,
+  onSelectStudyNext,
   copy,
   activeAssessmentCards,
   data,
@@ -93,6 +98,8 @@ export function TopStatsOverlay({
         <GraphStatItems
           activeGraph={activeGraph}
           graphSummary={graphSummary}
+          studyNext={studyNext}
+          onSelectStudyNext={onSelectStudyNext}
           copy={copy}
           activeAssessmentCards={activeAssessmentCards}
           data={data}

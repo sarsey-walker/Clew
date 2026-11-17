@@ -51,6 +51,41 @@ function isClosedTopic(topic: Topic | undefined): boolean {
   return topic?.state === "solid" || topic?.state === "mastered";
 }
 
+export type StudyNextRecommendation = {
+  topic: Topic;
+  reason: "due_review" | "needs_practice" | "continue_learning" | "ready_to_start" | "early_review";
+};
+
+export function recommendStudyNext(graph: GraphEnvelope | null, nowMs: number): StudyNextRecommendation | null {
+  if (!graph?.topics.length) return null;
+  const byId = new Map(graph.topics.map((topic) => [topic.id, topic]));
+  const parentsByChild = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    if (!isPrerequisiteEdge(edge.relation)) continue;
+    const parents = parentsByChild.get(edge.target_topic_id) ?? [];
+    parents.push(edge.source_topic_id);
+    parentsByChild.set(edge.target_topic_id, parents);
+  }
+  const scheduled = graph.topics
+    .flatMap((topic) => topic.description.trim() && topic.review?.due_at
+      ? [{ topic, dueMs: Date.parse(topic.review.due_at) }]
+      : [])
+    .filter((entry) => Number.isFinite(entry.dueMs))
+    .sort((left, right) => left.dueMs - right.dueMs);
+  const due = scheduled.find((entry) => entry.dueMs <= nowMs);
+  if (due) return { topic: due.topic, reason: "due_review" };
+
+  const ready = graph.topics.filter((topic) => !isClosedTopic(topic) &&
+    (parentsByChild.get(topic.id) ?? []).every((parentId) => isClosedTopic(byId.get(parentId))));
+  const practice = ready.find((topic) => topic.state === "needs_review" || topic.state === "shaky");
+  if (practice) return { topic: practice, reason: "needs_practice" };
+  const learning = ready.find((topic) => topic.state === "learning");
+  if (learning) return { topic: learning, reason: "continue_learning" };
+  const newTopic = ready.find((topic) => topic.state === "not_started");
+  if (newTopic) return { topic: newTopic, reason: "ready_to_start" };
+  return scheduled.length ? { topic: scheduled[0].topic, reason: "early_review" } : null;
+}
+
 export function computeGraphSummary(graph: GraphEnvelope | null): {
   topicCount: number;
   completedPercent: number;

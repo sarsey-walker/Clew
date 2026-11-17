@@ -20,7 +20,7 @@ import {
 import { readErrorMessage, type apiFetch } from "../lib/apiRequest";
 import { renderDisplayText, safeExternalUrl, type ManualLayoutPositions, type PopoverPosition } from "../lib/appUiHelpers";
 import type { AppCopy } from "../lib/appCopy";
-import { formatMinutes, formatTopicState, getTopicStateTone } from "../lib/graph";
+import { formatMinutes, formatTopicState, getTopicStateTone, recommendStudyNext } from "../lib/graph";
 import { useModalAccessibility } from "../lib/useModalAccessibility";
 import { GraphCanvas } from "./GraphCanvas";
 import type { TopicAnchorPoint } from "./GraphCanvas";
@@ -444,6 +444,18 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const lightChatPanelOpen = experimentalLightDesktop && assistantOpen;
   const overlayLeftInset = experimentalLightDesktop ? 104 : overlayLeftOffset;
   const overlayRightInset = experimentalLightDesktop ? 24 : overlayRightOffset;
+  const [studyNowMs, setStudyNowMs] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setStudyNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const studyNext = React.useMemo(() => recommendStudyNext(activeGraph, studyNowMs), [activeGraph, studyNowMs]);
+  const selectStudyNext = React.useCallback(() => {
+    const recommendation = recommendStudyNext(activeGraph, Date.now());
+    if (!recommendation) return;
+    setSelectedTopicId(recommendation.topic.id);
+    setSelectedTopicAnchor(null);
+  }, [activeGraph, setSelectedTopicAnchor, setSelectedTopicId]);
   const getDockIconWeight = React.useCallback((isActive: boolean) => (isActive ? "fill" : "regular"), []);
 
   const graphCanvasBackgroundFill = themeMode === "light" ? "#f7f7f4" : "#000000";
@@ -1207,6 +1219,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
           floatingStatsRef={floatingStatsRef}
           activeGraph={activeGraph}
           graphSummary={graphSummary}
+          studyNext={studyNext}
+          onSelectStudyNext={selectStudyNext}
           copy={copy}
           activeAssessmentCards={activeAssessmentCards}
           data={data}
@@ -1240,6 +1254,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
           floatingStatsRef={floatingStatsRef}
           activeGraph={activeGraph}
           graphSummary={graphSummary}
+          studyNext={studyNext}
+          onSelectStudyNext={selectStudyNext}
           copy={copy}
           activeAssessmentCards={activeAssessmentCards}
           data={data}
@@ -1273,6 +1289,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
           floatingStatsRef={floatingStatsRef}
           activeGraph={activeGraph}
           graphSummary={graphSummary}
+          studyNext={studyNext}
+          onSelectStudyNext={selectStudyNext}
           copy={copy}
           activeAssessmentCards={activeAssessmentCards}
           data={data}

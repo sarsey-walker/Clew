@@ -64,6 +64,8 @@ The existing completion-test button starts a separate ephemeral turn with only t
 
 The topic review button starts a separate ephemeral turn with only `read_topic` and `present_review_prompt`. The model must read the selected topic before submitting a question and reference answer. An absent or invalid tool result fails explicitly; generating a prompt does not write a snapshot. After the learner compares their own answer, Clew records their self-rating and next due date in a reversible snapshot, separately from topic completion.
 
+The graph's Study next shortcut reads the current graph locally. It prioritizes overdue reviews, then topics whose `requires` prerequisites are closed, with practice and in-progress topics before untouched ones. It only selects a topic; it does not change progress or graph structure.
+
 Question and checkpoint tools return `awaiting_answer` and end the current generation. Cards remain answerable after Stop or a backend restart. Submitting a card persists the answer and starts a new model turn with structured Clew application data, without inserting a user chat message. Answering an already answered card is rejected. A concurrent model turn must finish or be stopped before another card answer is accepted.
 
 ## Authentication and plan usage
