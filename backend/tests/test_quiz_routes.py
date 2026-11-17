@@ -32,6 +32,7 @@ class QuizRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertEqual(response.json()["detail"], "ChatGPT plan limit reached")
 
+
     def test_saved_workspace_policy_controls_generation_and_grading(self):
         saved = self.client.post("/api/v1/workspace/config", json={"quiz_question_count": 6, "pass_threshold": 1})
         self.assertEqual(saved.status_code, 200, saved.text)
@@ -119,3 +120,23 @@ class QuizRouteTests(unittest.TestCase):
         response = self.client.post(self.url+"/submit", json={"session_id": session["session_id"],
             "answers": [{"question_id": session["questions"][0]["id"], "choice_index": True}]})
         self.assertEqual(response.status_code, 422)
+
+
+class ReviewPromptRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.client, self.repo, self.runtime = install_client(self, "review")
+        self.url = "/api/v1/workspace/graphs/mathematics-demo/topics/arithmetics/review/prompt"
+
+    def test_generates_question_without_changing_graph(self):
+        before = self.repo.current().snapshot.id
+        response = self.client.post(self.url, json={})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn("question", response.json())
+        self.assertIn("reference", response.json())
+        self.assertEqual(self.repo.current().snapshot.id, before)
+
+    def test_model_failure_is_explicit(self):
+        self.runtime.generate_review_prompt = AsyncMock(side_effect=ChatGPTError("usage", "ChatGPT plan limit reached"))
+        response = self.client.post(self.url, json={})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"], "ChatGPT plan limit reached")

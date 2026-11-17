@@ -9,7 +9,7 @@ from uuid import uuid4
 from app.agent.chatgpt_api import ChatGPTClient
 from app.agent.chatgpt_auth import CALLBACK_PATH, ChatGPTAuth, ChatGPTError, KeyringCredentialStore
 from app.agent.context import BASE_INSTRUCTIONS, developer_instructions, turn_context
-from app.agent.contracts import CLOSURE_QUIZ_TOOLS, tool_specs
+from app.agent.contracts import CLOSURE_QUIZ_TOOLS, REVIEW_PROMPT_TOOLS, tool_specs
 from app.agent.store import AgentStore
 from app.core.config import Settings
 from app.models.domain import ChatMessage, GraphChatRequest, TopicQuizSession
@@ -42,6 +42,9 @@ class AgentRun:
     quiz_topic_id: str | None = None
     quiz_count: int | None = None
     quiz_session: TopicQuizSession | None = None
+    review_topic_id: str | None = None
+    review_topic_read: bool = False
+    review_prompt: dict[str, str] | None = None
     cancel_requested: bool = False
     web_searched: bool = False
 
@@ -173,6 +176,35 @@ class AgentRuntime:
                 await self.interrupt_run(run)
             self.runs.pop(run.id, None)
 
+    async def generate_review_prompt(self, graph_id: str, topic_id: str, model: str | None) -> dict[str, str]:
+        graph = self.repository.graph(graph_id)
+        topic = next((item for item in graph.topics if item.id == topic_id), None)
+        if topic is None:
+            raise ValueError("Topic not found in this graph.")
+        if not topic.description.strip():
+            raise ValueError("This topic needs a description before it can be reviewed.")
+        selected = await self._select_model(model)
+        run = AgentRun(id=uuid4().hex, graph_id=graph_id, session_id=None, model=selected,
+                       request=GraphChatRequest(prompt=(
+                           f"Prepare one open recall question for topic {topic_id}. Read the topic first. "
+                           "Call present_review_prompt with a focused question and a concise, accurate reference answer "
+                           "grounded in the topic description. Do not reveal the reference in the question."
+                       ), selected_topic_id=topic_id),
+                       done=asyncio.get_running_loop().create_future(), review_topic_id=topic_id)
+        self.runs[run.id] = run
+        run.task = asyncio.create_task(self._execute(run, []))
+        try:
+            await asyncio.shield(run.done)
+            if run.error:
+                raise agent_error(run.error)
+            if run.review_prompt is None:
+                raise agent_error("The model finished without creating the requested review question.")
+            return run.review_prompt
+        finally:
+            if not run.done.done():
+                await self.interrupt_run(run)
+            self.runs.pop(run.id, None)
+
     def emit(self, run: AgentRun, event: dict) -> None:
         if run.session_id:
             self.store.emit(run.session_id, run.id, event)
@@ -238,7 +270,7 @@ class AgentRuntime:
         try:
             run.model = await self._select_model(run.request.model or run.model or None)
             config = self.repository.current().workspace.config
-            tools = tool_specs(CLOSURE_QUIZ_TOOLS if run.session_id is None else None)
+            tools = tool_specs(REVIEW_PROMPT_TOOLS if run.review_topic_id else CLOSURE_QUIZ_TOOLS if run.session_id is None else None)
             # Chat turns may search the web; the model decides when. Quiz generation stays offline.
             if run.session_id is not None:
                 tools.append({"type": "web_search"})

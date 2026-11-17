@@ -43,6 +43,11 @@ export type Topic = {
   metadata?: Record<string, unknown>;
 };
 
+export type TopicReviewPrompt = {
+  question: string;
+  reference: string;
+};
+
 export type QuizAttempt = {
   id: string;
   topic_id: string;

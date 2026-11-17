@@ -42,6 +42,7 @@ import type {
   ProposalGenerateResponse,
   ResourceLink,
   Topic,
+  TopicReviewPrompt,
   TopicClosureStatus,
   WorkspaceEnvelope,
 } from "../lib/types";
@@ -185,6 +186,7 @@ type TopicDetailsProps = {
   updateTopicResource: (topicId: string, resourceId: string, label: string, url: string) => Promise<void>;
   deleteTopicResource: (topicId: string, resourceId: string) => Promise<void>;
   recordTopicReview: (topicId: string, rating: "again" | "hard" | "remembered") => Promise<void>;
+  generateTopicReviewPrompt: (topicId: string) => Promise<TopicReviewPrompt>;
   addTopicArtifact: (topicId: string, title: string, body: string) => Promise<void>;
   selectedTopic: Topic | null;
   selectedTopicAnchor: TopicAnchorPoint | null;
@@ -339,6 +341,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     updateTopicResource,
     deleteTopicResource,
     recordTopicReview,
+    generateTopicReviewPrompt,
     addTopicArtifact,
     selectedTopic,
     selectedTopicAnchor,
@@ -460,6 +463,10 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const [resourceDeleteError, setResourceDeleteError] = React.useState<string | null>(null);
   const [resourceDeleting, setResourceDeleting] = React.useState(false);
   const [reviewOpen, setReviewOpen] = React.useState(false);
+  const [reviewPrompt, setReviewPrompt] = React.useState<TopicReviewPrompt | null>(null);
+  const [reviewLoading, setReviewLoading] = React.useState(false);
+  const [reviewPromptError, setReviewPromptError] = React.useState<string | null>(null);
+  const reviewRequestRef = React.useRef(0);
   const [reviewAnswer, setReviewAnswer] = React.useState("");
   const [reviewRevealed, setReviewRevealed] = React.useState(false);
   const [reviewSaving, setReviewSaving] = React.useState(false);
@@ -479,7 +486,11 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     setTopicArtifactBodyDraft("");
   }, []);
   const closeReviewModal = React.useCallback(() => {
+    reviewRequestRef.current += 1;
     setReviewOpen(false);
+    setReviewPrompt(null);
+    setReviewLoading(false);
+    setReviewPromptError(null);
     setReviewAnswer("");
     setReviewRevealed(false);
     setReviewError(null);
@@ -496,7 +507,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     closeReviewModal();
     setResourceDeleteTarget(null);
     setResourceDeleteError(null);
-  }, [closeTopicAssetModal, closeReviewModal, selectedTopic?.id]);
+  }, [activeGraph?.graph_id, closeTopicAssetModal, closeReviewModal, selectedTopic?.id]);
 
   const beginFloatingDrag = React.useCallback((target: FloatingWindowDragTarget, event: React.PointerEvent<HTMLElement>) => {
     if (!experimentalLightDesktop) return;
@@ -840,6 +851,23 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
       setReviewError(error instanceof Error ? error.message : copy.topic.reviewError);
     } finally {
       setReviewSaving(false);
+    }
+  }
+
+  async function startTopicReview(topicId: string): Promise<void> {
+    const requestId = ++reviewRequestRef.current;
+    setReviewLoading(true);
+    setReviewPromptError(null);
+    try {
+      const prompt = await generateTopicReviewPrompt(topicId);
+      if (requestId !== reviewRequestRef.current) return;
+      setReviewPrompt(prompt);
+      setReviewOpen(true);
+    } catch (error) {
+      if (requestId !== reviewRequestRef.current) return;
+      setReviewPromptError(error instanceof Error ? error.message : copy.topic.reviewPromptError);
+    } finally {
+      if (requestId === reviewRequestRef.current) setReviewLoading(false);
     }
   }
 
@@ -1479,7 +1507,8 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                       <div className="topicPopoverLabel">{copy.topic.review}</div>
                       {selectedTopic.review?.due_at ? <div className="topicPopoverCopy">{copy.topic.reviewDue(new Date(selectedTopic.review.due_at).toLocaleDateString())}</div> : null}
                       {!selectedTopic.description.trim() ? <div className="topicPopoverEmpty">{copy.topic.reviewUnavailable}</div> : null}
-                      <button className="topicPopoverPrimary" type="button" disabled={!selectedTopic.description.trim()} onClick={() => setReviewOpen(true)}>{copy.topic.review}</button>
+                      {reviewPromptError ? <div className="inlineNotice inlineNoticeError">{reviewPromptError}</div> : null}
+                      <button className="topicPopoverPrimary" type="button" disabled={!selectedTopic.description.trim() || reviewLoading} onClick={() => void startTopicReview(selectedTopic.id)}>{reviewLoading ? copy.topic.reviewPreparing : copy.topic.review}</button>
                     </div>
                     {selectedClosureStatus ? (
                       <div className="topicPopoverSection topicPopoverClosure">
@@ -1737,6 +1766,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
       <TopicReviewDialog
         topic={selectedTopic}
         open={reviewOpen}
+        prompt={reviewPrompt}
         modalRef={reviewModalRef}
         copy={copy}
         answer={reviewAnswer}

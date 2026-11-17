@@ -232,6 +232,19 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ChatGPTError, "without creating"):
             await asyncio.wait_for(self.runtime.generate_closure_quiz(self.graph_id, "arithmetics", 6, None), 30)
 
+    async def test_review_prompt_uses_selected_model_and_review_tools(self):
+        self.peer.scenario = "review"
+        prompt = await asyncio.wait_for(self.runtime.generate_review_prompt(self.graph_id, "arithmetics", None), 30)
+        self.assertIn("addition", prompt["question"])
+        self.assertIn("subtraction", prompt["reference"])
+        self.assertEqual([tool.get("name") for tool in self.peer.requests[0]["tools"]], ["present_review_prompt", "read_topic"])
+        self.assertEqual(self.runtime.runs, {})
+
+    async def test_review_prompt_fails_if_model_does_not_use_contract(self):
+        self.peer.scenario = "review-no-tool"
+        with self.assertRaisesRegex(ChatGPTError, "without creating"):
+            await asyncio.wait_for(self.runtime.generate_review_prompt(self.graph_id, "arithmetics", None), 30)
+
     async def test_restart_keeps_unanswered_cards_available_without_a_live_run(self):
         sid, run = await self.start("question")
         interaction = await self.wait_question(run)

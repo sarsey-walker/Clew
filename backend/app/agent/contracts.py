@@ -134,16 +134,24 @@ class ClosureQuizDraft(QuizQuestionSetDraft):
     topic_id: str
 
 
+class ReviewPromptDraft(ToolInput):
+    topic_id: str = Field(min_length=1)
+    question: str = Field(min_length=15, max_length=2000)
+    reference: str = Field(min_length=15, max_length=4000)
+
+
 TOOL_MODELS = {
     "propose_ingest": ProposalDraft,
     "propose_expand": ProposalDraft,
     "ask_question": QuestionDraft,
     "present_quiz": InlineQuizDraft,
     "create_closure_quiz": ClosureQuizDraft,
+    "present_review_prompt": ReviewPromptDraft,
 }
 
 
 CLOSURE_QUIZ_TOOLS = frozenset({"read_graph", "read_topic", "create_closure_quiz"})
+REVIEW_PROMPT_TOOLS = frozenset({"read_topic", "present_review_prompt"})
 
 
 def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
@@ -154,6 +162,7 @@ def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
         "ask_question": "Show a focused question, optionally with choices and free-text replies. Ends this reply; the learner's answer arrives from Clew in a new turn.",
         "present_quiz": "Show one multiple-choice learning checkpoint with exactly four distinct choices. Ends this reply; Clew sends the server-graded answer in a new turn. Does not award topic completion.",
         "create_closure_quiz": "Register a complete closure quiz for a topic. Supply the requested number of questions with four distinct choices each. Clew checks prerequisites and grades the learner's answers itself.",
+        "present_review_prompt": "Prepare one open recall question for the requested topic and a concise reference answer. Clew validates and shows both in the topic review dialog; this does not change graph progress.",
     }
     functions = [
         {"type": "function", "name": name, "description": descriptions[name], "parameters": model.model_json_schema(), "strict": False}
@@ -163,4 +172,6 @@ def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
         {"type": "function", "name": "read_graph", "description": "Read the current graph, its version, topics, edges, zones and progress. Call again after a conflict; do not guess ids or graph revisions.", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}, "strict": False},
         {"type": "function", "name": "read_topic", "description": "Read the full content, resources, artifacts and prerequisites of a topic in this conversation's graph.", "parameters": {"type": "object", "properties": {"topic_id": {"type": "string"}}, "required": ["topic_id"], "additionalProperties": False}, "strict": False},
     ])
-    return [tool for tool in functions if only is None or tool["name"] in only]
+    return [tool for tool in functions if tool["name"] in only] if only is not None else [
+        tool for tool in functions if tool["name"] != "present_review_prompt"
+    ]

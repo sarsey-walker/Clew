@@ -54,6 +54,7 @@ import type {
   DebugLogSnapshot,
   SnapshotRecord,
   TopicQuizSession,
+  TopicReviewPrompt,
   WorkspaceEnvelope,
 } from "./lib/types";
 
@@ -1076,6 +1077,17 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     await loadSnapshots();
   }
 
+  async function generateTopicReviewPrompt(topicId: string): Promise<TopicReviewPrompt> {
+    if (!activeGraph) throw new Error(copy.topic.reviewError);
+    const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/review/prompt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: data?.workspace.config.default_model ?? null }),
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, copy.topic.reviewPromptError));
+    return (await response.json()) as TopicReviewPrompt;
+  }
+
   async function addTopicArtifact(topicId: string, title: string, body: string): Promise<void> {
     if (!activeGraph) return;
     const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/artifacts`, {
@@ -1370,6 +1382,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           updateTopicResource,
           deleteTopicResource,
           recordTopicReview,
+          generateTopicReviewPrompt,
           addTopicArtifact,
           selectedTopic,
           selectedTopicAnchor,

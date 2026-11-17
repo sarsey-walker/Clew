@@ -171,6 +171,14 @@ class FakeChatGPT:
             output = outputs[-1]["output"]
             if '"error"' in output:
                 return self._reply("The tool rejected the request: " + output)
+            if scenario == "review":
+                if step == 1:
+                    return self._complete([], [self._call("present_review_prompt", {
+                        "topic_id": context["selected_topic_id"],
+                        "question": "Explain how addition and subtraction relate in arithmetic.",
+                        "reference": "Addition combines quantities; subtraction finds the difference or undoes addition.",
+                    })])
+                return self._reply("The review question is ready.")
             if scenario in {"question", "inline"}:
                 return self._reply("Tool result received.\n\n" + output)
             return self._reply("The proposal is ready for your review.")
@@ -178,6 +186,10 @@ class FakeChatGPT:
             return self._complete([], [self._call("ask_question", {"question": "Which part should we explore?", "choices": ["Theory", "Practice"]})])
         if scenario == "inline":
             return self._complete([], [self._call("present_quiz", {"question": "What is 2 + 2?", "choices": ["3", "4", "5", "6"], "correct_index": 1})])
+        if scenario == "review":
+            return self._complete([], [self._call("read_topic", {"topic_id": context["selected_topic_id"]})])
+        if scenario == "review-no-tool":
+            return self._reply("Here is a review question.")
         if scenario in {"closure", "bad-closure"}:
             count = context["closure_question_count"]
             match = re.search(r"exactly (\d+) questions", prompt)

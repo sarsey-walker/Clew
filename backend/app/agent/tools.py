@@ -4,7 +4,7 @@ import json
 from typing import TYPE_CHECKING
 
 from app.agent.context import graph_context
-from app.agent.contracts import CLOSURE_QUIZ_TOOLS, TOOL_MODELS, ClosureQuizDraft, InlineQuizDraft, ProposalDraft, QuestionDraft
+from app.agent.contracts import CLOSURE_QUIZ_TOOLS, REVIEW_PROMPT_TOOLS, TOOL_MODELS, ClosureQuizDraft, InlineQuizDraft, ProposalDraft, QuestionDraft, ReviewPromptDraft
 from app.models.domain import AgentActivity, AgentQuestion, ChatMessage, InlineChatQuiz, QuizQuestion, TopicQuizSessionPublic
 from app.services.proposal_service import ProposalService
 from app.services.quiz_service import QuizService
@@ -21,6 +21,7 @@ LABELS = {
     "ask_question": "Waiting for your answer",
     "present_quiz": "Waiting for your answer",
     "create_closure_quiz": "Preparing your test",
+    "present_review_prompt": "Preparing your review question",
 }
 
 
@@ -42,6 +43,8 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
             raise ValueError("Unknown Clew tool.")
         if run.quiz_topic_id and tool not in CLOSURE_QUIZ_TOOLS:
             raise ValueError("This turn can only prepare the requested completion test.")
+        if run.review_topic_id and tool not in REVIEW_PROMPT_TOOLS:
+            raise ValueError("This turn can only prepare the requested review question.")
         try:
             arguments = json.loads(raw_arguments or "{}")
         except json.JSONDecodeError as exc:
@@ -61,8 +64,22 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
             topic = next((t for t in graph.topics if t.id == arguments["topic_id"]), None)
             if topic is None:
                 raise ValueError("Topic not found in this conversation's graph.")
+            if run.review_topic_id:
+                if topic.id != run.review_topic_id:
+                    raise ValueError("Read the requested review topic.")
+                run.review_topic_read = True
             result = {"graph_version": graph.version, "topic": topic.model_dump(mode="json"),
                       "closure": QuizService(runtime.settings).build_closure_status(graph, topic.id).model_dump(mode="json")}
+        elif tool == "present_review_prompt":
+            assert isinstance(parsed, ReviewPromptDraft)
+            if parsed.topic_id != run.review_topic_id:
+                raise ValueError("The review question must be for the requested topic.")
+            if not run.review_topic_read:
+                raise ValueError("Read the requested topic before preparing its review question.")
+            if run.review_prompt is not None:
+                raise ValueError("A review question has already been prepared for this turn.")
+            run.review_prompt = {"question": parsed.question, "reference": parsed.reference}
+            result = {"status": "ready", "message": "The review question is ready in Clew."}
         elif tool in {"propose_ingest", "propose_expand"}:
             assert isinstance(parsed, ProposalDraft)
             proposal = ProposalService().prepare(graph, parsed, tool=tool, proposal_id=f"prop-{call_id}",
