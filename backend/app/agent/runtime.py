@@ -9,7 +9,7 @@ from uuid import uuid4
 from app.agent.chatgpt_api import ChatGPTClient
 from app.agent.chatgpt_auth import CALLBACK_PATH, ChatGPTAuth, ChatGPTError, KeyringCredentialStore
 from app.agent.context import BASE_INSTRUCTIONS, developer_instructions, turn_context
-from app.agent.contracts import CLOSURE_QUIZ_TOOLS, REVIEW_PROMPT_TOOLS, tool_specs
+from app.agent.contracts import CLOSURE_QUIZ_TOOLS, CONNECTION_PROMPT_TOOLS, REVIEW_PROMPT_TOOLS, tool_specs
 from app.agent.store import AgentStore
 from app.core.config import Settings
 from app.models.domain import ChatMessage, GraphChatRequest, TopicQuizSession
@@ -45,6 +45,11 @@ class AgentRun:
     review_topic_id: str | None = None
     review_topic_read: bool = False
     review_prompt: dict[str, str] | None = None
+    connection_edge_id: str | None = None
+    connection_topic_ids: tuple[str, str] | None = None
+    connection_graph_version: int | None = None
+    connection_read_topic_ids: set[str] = field(default_factory=set)
+    connection_prompt: dict[str, str] | None = None
     cancel_requested: bool = False
     web_searched: bool = False
 
@@ -205,6 +210,48 @@ class AgentRuntime:
                 await self.interrupt_run(run)
             self.runs.pop(run.id, None)
 
+    async def generate_connection_prompt(self, graph_id: str, topic_id: str, edge_id: str, model: str | None) -> dict[str, str]:
+        graph = self.repository.graph(graph_id)
+        edge = next((item for item in graph.edges if item.id == edge_id), None)
+        if (edge is None or edge.source_topic_id == edge.target_topic_id
+                or topic_id not in {edge.source_topic_id, edge.target_topic_id}):
+            raise ValueError("Choose an edge connected to the selected topic.")
+        by_id = {topic.id: topic for topic in graph.topics}
+        source = by_id.get(edge.source_topic_id)
+        target = by_id.get(edge.target_topic_id)
+        if source is None or target is None:
+            raise ValueError("The selected graph edge references a missing topic.")
+        if not source.description.strip() or not target.description.strip():
+            raise ValueError("Both connected topics need descriptions before practicing their connection.")
+        selected = await self._select_model(model)
+        edge_context = json.dumps({"id": edge.id, "source_topic_id": edge.source_topic_id,
+                                   "target_topic_id": edge.target_topic_id, "relation": edge.relation,
+                                   "rationale": edge.rationale}, ensure_ascii=False)
+        run = AgentRun(id=uuid4().hex, graph_id=graph_id, session_id=None, model=selected,
+                       request=GraphChatRequest(prompt=(
+                           "Prepare one open question that requires connecting the two topics on this graph edge. "
+                           f"Graph edge: {edge_context}. Read both topics first. "
+                           "Call present_connection_prompt with the edge id, a focused question, and a concise "
+                           "reference answer grounded in both topic descriptions and the edge relation. "
+                           "Do not reveal the reference in the question."
+                       ), selected_topic_id=topic_id),
+                       done=asyncio.get_running_loop().create_future(), connection_edge_id=edge.id,
+                       connection_topic_ids=(edge.source_topic_id, edge.target_topic_id),
+                       connection_graph_version=graph.version)
+        self.runs[run.id] = run
+        run.task = asyncio.create_task(self._execute(run, []))
+        try:
+            await asyncio.shield(run.done)
+            if run.error:
+                raise agent_error(run.error)
+            if run.connection_prompt is None:
+                raise agent_error("The model finished without creating the requested connection question.")
+            return run.connection_prompt
+        finally:
+            if not run.done.done():
+                await self.interrupt_run(run)
+            self.runs.pop(run.id, None)
+
     def emit(self, run: AgentRun, event: dict) -> None:
         if run.session_id:
             self.store.emit(run.session_id, run.id, event)
@@ -270,7 +317,7 @@ class AgentRuntime:
         try:
             run.model = await self._select_model(run.request.model or run.model or None)
             config = self.repository.current().workspace.config
-            tools = tool_specs(REVIEW_PROMPT_TOOLS if run.review_topic_id else CLOSURE_QUIZ_TOOLS if run.session_id is None else None)
+            tools = tool_specs(CONNECTION_PROMPT_TOOLS if run.connection_edge_id else REVIEW_PROMPT_TOOLS if run.review_topic_id else CLOSURE_QUIZ_TOOLS if run.session_id is None else None)
             # Chat turns may search the web; the model decides when. Quiz generation stays offline.
             if run.session_id is not None:
                 tools.append({"type": "web_search"})

@@ -140,6 +140,12 @@ class ReviewPromptDraft(ToolInput):
     reference: str = Field(min_length=15, max_length=4000)
 
 
+class ConnectionPromptDraft(ToolInput):
+    edge_id: str = Field(min_length=1)
+    question: str = Field(min_length=15, max_length=2000)
+    reference: str = Field(min_length=15, max_length=4000)
+
+
 TOOL_MODELS = {
     "propose_ingest": ProposalDraft,
     "propose_expand": ProposalDraft,
@@ -147,11 +153,13 @@ TOOL_MODELS = {
     "present_quiz": InlineQuizDraft,
     "create_closure_quiz": ClosureQuizDraft,
     "present_review_prompt": ReviewPromptDraft,
+    "present_connection_prompt": ConnectionPromptDraft,
 }
 
 
 CLOSURE_QUIZ_TOOLS = frozenset({"read_graph", "read_topic", "create_closure_quiz"})
 REVIEW_PROMPT_TOOLS = frozenset({"read_topic", "present_review_prompt"})
+CONNECTION_PROMPT_TOOLS = frozenset({"read_topic", "present_connection_prompt"})
 
 
 def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
@@ -163,6 +171,7 @@ def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
         "present_quiz": "Show one multiple-choice learning checkpoint with exactly four distinct choices. Ends this reply; Clew sends the server-graded answer in a new turn. Does not award topic completion.",
         "create_closure_quiz": "Register a complete closure quiz for a topic. Supply the requested number of questions with four distinct choices each. Clew checks prerequisites and grades the learner's answers itself.",
         "present_review_prompt": "Prepare one open recall question for the requested topic and a concise reference answer. Clew validates and shows both in the topic review dialog; this does not change graph progress.",
+        "present_connection_prompt": "Prepare one open question that makes the learner connect the two topics on the requested graph edge, plus a concise reference answer. Clew validates and shows both without changing graph progress.",
     }
     functions = [
         {"type": "function", "name": name, "description": descriptions[name], "parameters": model.model_json_schema(), "strict": False}
@@ -173,5 +182,5 @@ def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
         {"type": "function", "name": "read_topic", "description": "Read the full content, resources, artifacts and prerequisites of a topic in this conversation's graph.", "parameters": {"type": "object", "properties": {"topic_id": {"type": "string"}}, "required": ["topic_id"], "additionalProperties": False}, "strict": False},
     ])
     return [tool for tool in functions if tool["name"] in only] if only is not None else [
-        tool for tool in functions if tool["name"] != "present_review_prompt"
+        tool for tool in functions if tool["name"] not in {"present_review_prompt", "present_connection_prompt"}
     ]

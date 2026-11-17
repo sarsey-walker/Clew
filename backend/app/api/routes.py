@@ -26,7 +26,7 @@ from app.api.route_helpers import (
     workspace_config_payload as _workspace_config_payload,
 )
 from app.core.config import Settings, get_settings
-from app.models.api import GraphExportRequest, GraphImportRequest, GraphLayoutPositionRequest, RenameGraphRequest, TopicArtifactInput, TopicResourceInput, TopicReviewInput, TopicReviewPromptRequest, UpdateGraphLayoutRequest, UpdateTopicResourceInput
+from app.models.api import GraphExportRequest, GraphImportRequest, GraphLayoutPositionRequest, RenameGraphRequest, TopicArtifactInput, TopicConnectionPromptRequest, TopicResourceInput, TopicReviewInput, TopicReviewPromptRequest, UpdateGraphLayoutRequest, UpdateTopicResourceInput
 from app.models.domain import Artifact, CreateGraphRequest, GraphProposalEnvelope, QuizStartRequest, QuizStartResponse, QuizSubmitRequest, QuizSubmitResponse, ResourceLink, UpdateWorkspaceConfigRequest
 from app.services.debug_log_service import DebugClientLogRequest, get_debug_log_service
 from app.services.proposal_normalizer import ProposalNormalizer
@@ -269,6 +269,23 @@ async def generate_topic_review_prompt(
 ) -> dict[str, str]:
     try:
         return await runtime.generate_review_prompt(graph_id, topic_id, body.model)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Graph or topic not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ChatGPTError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/workspace/graphs/{graph_id}/topics/{topic_id}/connections/prompt")
+async def generate_topic_connection_prompt(
+    graph_id: str,
+    topic_id: str,
+    body: TopicConnectionPromptRequest,
+    runtime=Depends(get_agent_runtime),
+) -> dict[str, str]:
+    try:
+        return await runtime.generate_connection_prompt(graph_id, topic_id, body.edge_id, body.model)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Graph or topic not found") from exc
     except ValueError as exc:

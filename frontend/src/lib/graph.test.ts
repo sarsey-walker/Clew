@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Edge, Topic, GraphEnvelope } from "./types";
-import { computeRootTopicIds, computeFocusData, recommendStudyNext } from "./graph";
+import { computeRootTopicIds, computeFocusData, getTopicConnectionChoices, recommendStudyNext } from "./graph";
 
 const topics = [
   { id: "foundation" },
@@ -101,5 +101,26 @@ describe("study next recommendation", () => {
     expect(recommendStudyNext(studyGraph, now)).toMatchObject({ topic: { id: "closed" }, reason: "early_review" });
     studyGraph.topics[0].review = undefined;
     expect(recommendStudyNext(studyGraph, now)).toBeNull();
+  });
+});
+
+describe("topic connection choices", () => {
+  it("lists only real adjacent edges in either direction and marks missing descriptions", () => {
+    const graph = {
+      topics: [
+        { id: "a", description: "First topic" },
+        { id: "b", description: "Second topic" },
+        { id: "c", description: "" },
+      ],
+      edges: [
+        { id: "ab", source_topic_id: "a", target_topic_id: "b" },
+        { id: "ca", source_topic_id: "c", target_topic_id: "a" },
+        { id: "bc", source_topic_id: "b", target_topic_id: "c" },
+        { id: "loop", source_topic_id: "a", target_topic_id: "a" },
+      ],
+    } as GraphEnvelope;
+    expect(getTopicConnectionChoices(graph, "a").map(({ edge, other, available }) => [edge.id, other.id, available]))
+      .toEqual([["ab", "b", true], ["ca", "c", false]]);
+    expect(getTopicConnectionChoices(graph, "b").map(({ edge }) => edge.id)).toEqual(["ab", "bc"]);
   });
 });

@@ -1088,6 +1088,17 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
     return (await response.json()) as TopicReviewPrompt;
   }
 
+  async function generateTopicConnectionPrompt(topicId: string, edgeId: string): Promise<TopicReviewPrompt> {
+    if (!activeGraph) throw new Error(copy.topic.connectionError);
+    const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/connections/prompt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ edge_id: edgeId, model: data?.workspace.config.default_model ?? null }),
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, copy.topic.connectionError));
+    return (await response.json()) as TopicReviewPrompt;
+  }
+
   async function addTopicArtifact(topicId: string, title: string, body: string): Promise<void> {
     if (!activeGraph) return;
     const response = await apiFetch(`${API_BASE}/api/v1/workspace/graphs/${activeGraph.graph_id}/topics/${topicId}/artifacts`, {
@@ -1383,6 +1394,7 @@ export default function WorkspaceApp({ chatgpt }: { chatgpt: ChatGPTAccountContr
           deleteTopicResource,
           recordTopicReview,
           generateTopicReviewPrompt,
+          generateTopicConnectionPrompt,
           addTopicArtifact,
           selectedTopic,
           selectedTopicAnchor,

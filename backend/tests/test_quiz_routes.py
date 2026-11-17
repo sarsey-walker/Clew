@@ -140,3 +140,29 @@ class ReviewPromptRouteTests(unittest.TestCase):
         response = self.client.post(self.url, json={})
         self.assertEqual(response.status_code, 502)
         self.assertEqual(response.json()["detail"], "ChatGPT plan limit reached")
+
+
+class ConnectionPromptRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.client, self.repo, self.runtime = install_client(self, "connection")
+        self.url = "/api/v1/workspace/graphs/mathematics-demo/topics/arithmetics/connections/prompt"
+
+    def test_generates_question_without_changing_graph(self):
+        before = self.repo.current().snapshot.id
+        response = self.client.post(self.url, json={"edge_id": "edge-arith-algebra"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn("question", response.json())
+        self.assertIn("reference", response.json())
+        self.assertEqual(self.repo.current().snapshot.id, before)
+
+    def test_unconnected_edge_is_rejected(self):
+        before = self.repo.current().snapshot.id
+        response = self.client.post(self.url, json={"edge_id": "edge-angles-triangles"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.repo.current().snapshot.id, before)
+
+    def test_model_failure_is_explicit(self):
+        self.runtime.generate_connection_prompt = AsyncMock(side_effect=ChatGPTError("usage", "ChatGPT plan limit reached"))
+        response = self.client.post(self.url, json={"edge_id": "edge-arith-algebra"})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"], "ChatGPT plan limit reached")

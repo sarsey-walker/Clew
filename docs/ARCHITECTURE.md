@@ -57,12 +57,15 @@ Tools are supplied as Responses API function tools on every request (`parallel_t
 | `present_quiz` | Show a persistent four-choice checkpoint; grade its answer on the server |
 | `create_closure_quiz` | Validate and register a full completion test; never award progress directly |
 | `present_review_prompt` | Supply a recall question and reference answer for the selected topic's review dialog |
+| `present_connection_prompt` | Supply a question and reference answer connecting two topics on a selected graph edge |
 
 Proposal tools accept explicit topic, edge and zone operations. They reject unknown references, disconnected islands, unsafe resource URLs, malformed operations and new topics claiming earned progress. They do not fabricate missing zones or silently repair semantics. The error goes back to the model, which may correct its call.
 
 The existing completion-test button starts a separate ephemeral turn with only the read and closure-quiz tools. The model supplies exactly the requested questions; Clew retains correct answers and grades submissions. The existing manual Finish action keeps its explicit prerequisite-closure behavior.
 
 The topic review button starts a separate ephemeral turn with only `read_topic` and `present_review_prompt`. The model must read the selected topic before submitting a question and reference answer. An absent or invalid tool result fails explicitly; generating a prompt does not write a snapshot. After the learner compares their own answer, Clew records their self-rating and next due date in a reversible snapshot, separately from topic completion.
+
+The topic connection action is available for existing graph edges. Its ephemeral turn exposes only `read_topic` and `present_connection_prompt`; the model must read both endpoints. Clew checks the edge id, graph version and endpoints before showing the question. The learner's comparison is a practice action and does not award progress or write a snapshot.
 
 The graph's Study next shortcut reads the current graph locally. It prioritizes overdue reviews, then topics whose `requires` prerequisites are closed, with practice and in-progress topics before untouched ones. It only selects a topic; it does not change progress or graph structure.
 

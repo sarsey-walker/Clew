@@ -38,6 +38,11 @@ class TopicReviewPromptRequest(BaseModel):
     model: str | None = None
 
 
+class TopicConnectionPromptRequest(BaseModel):
+    edge_id: str = Field(min_length=1)
+    model: str | None = None
+
+
 class TopicArtifactInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
     body: str = Field(min_length=1, max_length=12000)

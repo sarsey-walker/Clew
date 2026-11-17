@@ -245,6 +245,22 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ChatGPTError, "without creating"):
             await asyncio.wait_for(self.runtime.generate_review_prompt(self.graph_id, "arithmetics", None), 30)
 
+    async def test_connection_prompt_reads_both_topics_and_uses_selected_edge(self):
+        self.peer.scenario = "connection"
+        before = self.repo.current().snapshot.id
+        prompt = await asyncio.wait_for(self.runtime.generate_connection_prompt(self.graph_id, "arithmetics", "edge-arith-algebra", None), 30)
+        self.assertIn("arithmetic", prompt["question"])
+        self.assertIn("algebra", prompt["reference"])
+        self.assertEqual([tool.get("name") for tool in self.peer.requests[0]["tools"]], ["present_connection_prompt", "read_topic"])
+        self.assertEqual(self.repo.current().snapshot.id, before)
+        self.assertEqual(self.runtime.runs, {})
+
+    async def test_connection_prompt_rejects_unread_topic_and_missing_tool_result(self):
+        for scenario in ("connection-one-read", "connection-no-tool"):
+            self.peer.scenario = scenario
+            with self.assertRaisesRegex(ChatGPTError, "without creating"):
+                await asyncio.wait_for(self.runtime.generate_connection_prompt(self.graph_id, "arithmetics", "edge-arith-algebra", None), 30)
+
     async def test_restart_keeps_unanswered_cards_available_without_a_live_run(self):
         sid, run = await self.start("question")
         interaction = await self.wait_question(run)

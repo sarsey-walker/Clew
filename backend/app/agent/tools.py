@@ -4,7 +4,7 @@ import json
 from typing import TYPE_CHECKING
 
 from app.agent.context import graph_context
-from app.agent.contracts import CLOSURE_QUIZ_TOOLS, REVIEW_PROMPT_TOOLS, TOOL_MODELS, ClosureQuizDraft, InlineQuizDraft, ProposalDraft, QuestionDraft, ReviewPromptDraft
+from app.agent.contracts import CLOSURE_QUIZ_TOOLS, CONNECTION_PROMPT_TOOLS, REVIEW_PROMPT_TOOLS, TOOL_MODELS, ClosureQuizDraft, ConnectionPromptDraft, InlineQuizDraft, ProposalDraft, QuestionDraft, ReviewPromptDraft
 from app.models.domain import AgentActivity, AgentQuestion, ChatMessage, InlineChatQuiz, QuizQuestion, TopicQuizSessionPublic
 from app.services.proposal_service import ProposalService
 from app.services.quiz_service import QuizService
@@ -22,6 +22,7 @@ LABELS = {
     "present_quiz": "Waiting for your answer",
     "create_closure_quiz": "Preparing your test",
     "present_review_prompt": "Preparing your review question",
+    "present_connection_prompt": "Preparing a connection question",
 }
 
 
@@ -45,6 +46,8 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
             raise ValueError("This turn can only prepare the requested completion test.")
         if run.review_topic_id and tool not in REVIEW_PROMPT_TOOLS:
             raise ValueError("This turn can only prepare the requested review question.")
+        if run.connection_edge_id and tool not in CONNECTION_PROMPT_TOOLS:
+            raise ValueError("This turn can only prepare the requested connection question.")
         try:
             arguments = json.loads(raw_arguments or "{}")
         except json.JSONDecodeError as exc:
@@ -68,6 +71,10 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
                 if topic.id != run.review_topic_id:
                     raise ValueError("Read the requested review topic.")
                 run.review_topic_read = True
+            if run.connection_topic_ids:
+                if topic.id not in run.connection_topic_ids:
+                    raise ValueError("Read one of the requested connection topics.")
+                run.connection_read_topic_ids.add(topic.id)
             result = {"graph_version": graph.version, "topic": topic.model_dump(mode="json"),
                       "closure": QuizService(runtime.settings).build_closure_status(graph, topic.id).model_dump(mode="json")}
         elif tool == "present_review_prompt":
@@ -80,6 +87,20 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
                 raise ValueError("A review question has already been prepared for this turn.")
             run.review_prompt = {"question": parsed.question, "reference": parsed.reference}
             result = {"status": "ready", "message": "The review question is ready in Clew."}
+        elif tool == "present_connection_prompt":
+            assert isinstance(parsed, ConnectionPromptDraft)
+            if parsed.edge_id != run.connection_edge_id:
+                raise ValueError("The connection question must use the requested graph edge.")
+            if run.connection_topic_ids is None or run.connection_read_topic_ids != set(run.connection_topic_ids):
+                raise ValueError("Read both connected topics before preparing their question.")
+            edge = next((item for item in graph.edges if item.id == parsed.edge_id), None)
+            if (edge is None or graph.version != run.connection_graph_version
+                    or (edge.source_topic_id, edge.target_topic_id) != run.connection_topic_ids):
+                raise ValueError("The graph connection changed while preparing the question.")
+            if run.connection_prompt is not None:
+                raise ValueError("A connection question has already been prepared for this turn.")
+            run.connection_prompt = {"question": parsed.question, "reference": parsed.reference}
+            result = {"status": "ready", "message": "The connection question is ready in Clew."}
         elif tool in {"propose_ingest", "propose_expand"}:
             assert isinstance(parsed, ProposalDraft)
             proposal = ProposalService().prepare(graph, parsed, tool=tool, proposal_id=f"prop-{call_id}",

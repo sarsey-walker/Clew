@@ -20,7 +20,7 @@ import {
 import { readErrorMessage, type apiFetch } from "../lib/apiRequest";
 import { renderDisplayText, safeExternalUrl, type ManualLayoutPositions, type PopoverPosition } from "../lib/appUiHelpers";
 import type { AppCopy } from "../lib/appCopy";
-import { formatMinutes, formatTopicState, getTopicStateTone, recommendStudyNext } from "../lib/graph";
+import { formatMinutes, formatTopicState, getTopicConnectionChoices, getTopicStateTone, recommendStudyNext } from "../lib/graph";
 import { useModalAccessibility } from "../lib/useModalAccessibility";
 import { GraphCanvas } from "./GraphCanvas";
 import type { TopicAnchorPoint } from "./GraphCanvas";
@@ -32,6 +32,7 @@ import { TopStatsOverlay } from "./TopStatsOverlay";
 import { ClewLogo } from "./ClewLogo";
 import { TopicResourcesSection } from "./TopicResourcesSection";
 import { TopicReviewDialog } from "./TopicReviewDialog";
+import { TopicConnectionDialog } from "./TopicConnectionDialog";
 import type { GraphViewMode } from "./WorkspaceShellOverlayControls";
 import type {
   Artifact,
@@ -187,6 +188,7 @@ type TopicDetailsProps = {
   deleteTopicResource: (topicId: string, resourceId: string) => Promise<void>;
   recordTopicReview: (topicId: string, rating: "again" | "hard" | "remembered") => Promise<void>;
   generateTopicReviewPrompt: (topicId: string) => Promise<TopicReviewPrompt>;
+  generateTopicConnectionPrompt: (topicId: string, edgeId: string) => Promise<TopicReviewPrompt>;
   addTopicArtifact: (topicId: string, title: string, body: string) => Promise<void>;
   selectedTopic: Topic | null;
   selectedTopicAnchor: TopicAnchorPoint | null;
@@ -342,6 +344,7 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     deleteTopicResource,
     recordTopicReview,
     generateTopicReviewPrompt,
+    generateTopicConnectionPrompt,
     addTopicArtifact,
     selectedTopic,
     selectedTopicAnchor,
@@ -484,6 +487,17 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   const [reviewSaving, setReviewSaving] = React.useState(false);
   const [reviewError, setReviewError] = React.useState<string | null>(null);
   const reviewModalRef = React.useRef<HTMLDivElement | null>(null);
+  const [connectionEdgeIdDraft, setConnectionEdgeIdDraft] = React.useState("");
+  const [connectionPrompt, setConnectionPrompt] = React.useState<TopicReviewPrompt | null>(null);
+  const [connectionTopicTitles, setConnectionTopicTitles] = React.useState<[string, string] | null>(null);
+  const [connectionAnswer, setConnectionAnswer] = React.useState("");
+  const [connectionRevealed, setConnectionRevealed] = React.useState(false);
+  const [connectionLoading, setConnectionLoading] = React.useState(false);
+  const [connectionError, setConnectionError] = React.useState<string | null>(null);
+  const connectionRequestRef = React.useRef(0);
+  const connectionModalRef = React.useRef<HTMLDivElement | null>(null);
+  const connectionChoices = React.useMemo(() => getTopicConnectionChoices(activeGraph, selectedTopic?.id ?? null), [activeGraph, selectedTopic?.id]);
+  const selectedConnection = connectionChoices.find((choice) => choice.edge.id === connectionEdgeIdDraft) ?? connectionChoices[0] ?? null;
   const topicAssetModalRef = React.useRef<HTMLDivElement | null>(null);
   const topicAssetPrimaryInputRef = React.useRef<HTMLElement | null>(null);
   // Prevent repeated pointer events from creating duplicate topic chat sessions.
@@ -507,7 +521,17 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
     setReviewRevealed(false);
     setReviewError(null);
   }, []);
+  const closeConnectionModal = React.useCallback(() => {
+    connectionRequestRef.current += 1;
+    setConnectionPrompt(null);
+    setConnectionTopicTitles(null);
+    setConnectionAnswer("");
+    setConnectionRevealed(false);
+    setConnectionLoading(false);
+    setConnectionError(null);
+  }, []);
   useModalAccessibility({ isOpen: reviewOpen, modalRef: reviewModalRef, onClose: closeReviewModal });
+  useModalAccessibility({ isOpen: Boolean(connectionPrompt), modalRef: connectionModalRef, onClose: closeConnectionModal });
   useModalAccessibility({
     isOpen: Boolean(topicAssetDialog),
     modalRef: topicAssetModalRef,
@@ -517,9 +541,11 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
   React.useEffect(() => {
     closeTopicAssetModal();
     closeReviewModal();
+    closeConnectionModal();
+    setConnectionEdgeIdDraft("");
     setResourceDeleteTarget(null);
     setResourceDeleteError(null);
-  }, [activeGraph?.graph_id, closeTopicAssetModal, closeReviewModal, selectedTopic?.id]);
+  }, [activeGraph?.graph_id, closeTopicAssetModal, closeReviewModal, closeConnectionModal, selectedTopic?.id]);
 
   const beginFloatingDrag = React.useCallback((target: FloatingWindowDragTarget, event: React.PointerEvent<HTMLElement>) => {
     if (!experimentalLightDesktop) return;
@@ -880,6 +906,27 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
       setReviewPromptError(error instanceof Error ? error.message : copy.topic.reviewPromptError);
     } finally {
       if (requestId === reviewRequestRef.current) setReviewLoading(false);
+    }
+  }
+
+  async function startTopicConnection(topicId: string, edgeId: string): Promise<void> {
+    if (!activeGraph || !selectedConnection?.available || selectedConnection.edge.id !== edgeId) return;
+    const source = activeGraph.topics.find((topic) => topic.id === selectedConnection.edge.source_topic_id);
+    const target = activeGraph.topics.find((topic) => topic.id === selectedConnection.edge.target_topic_id);
+    if (!source || !target) return;
+    const requestId = ++connectionRequestRef.current;
+    setConnectionLoading(true);
+    setConnectionError(null);
+    try {
+      const prompt = await generateTopicConnectionPrompt(topicId, edgeId);
+      if (requestId !== connectionRequestRef.current) return;
+      setConnectionTopicTitles([source.title, target.title]);
+      setConnectionPrompt(prompt);
+    } catch (error) {
+      if (requestId !== connectionRequestRef.current) return;
+      setConnectionError(error instanceof Error ? error.message : copy.topic.connectionError);
+    } finally {
+      if (requestId === connectionRequestRef.current) setConnectionLoading(false);
     }
   }
 
@@ -1528,6 +1575,22 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
                       {reviewPromptError ? <div className="inlineNotice inlineNoticeError">{reviewPromptError}</div> : null}
                       <button className="topicPopoverPrimary" type="button" disabled={!selectedTopic.description.trim() || reviewLoading} onClick={() => void startTopicReview(selectedTopic.id)}>{reviewLoading ? copy.topic.reviewPreparing : copy.topic.review}</button>
                     </div>
+                    <div className="topicPopoverSection">
+                      <div className="topicPopoverLabel">{copy.topic.connectionPractice}</div>
+                      {connectionChoices.length ? (
+                        <>
+                          <label className="uiField">
+                            <span className="uiLabel">{copy.topic.connectionSelect}</span>
+                            <select className="uiSelect" value={selectedConnection?.edge.id ?? ""} disabled={connectionLoading} onChange={(event) => { setConnectionEdgeIdDraft(event.target.value); setConnectionError(null); }}>
+                              {connectionChoices.map(({ edge, other }) => <option key={edge.id} value={edge.id}>{other.title} · {edge.relation}</option>)}
+                            </select>
+                          </label>
+                          {selectedConnection && !selectedConnection.available ? <div className="topicPopoverEmpty">{copy.topic.connectionNeedsDescriptions}</div> : null}
+                          {connectionError ? <div className="inlineNotice inlineNoticeError">{connectionError}</div> : null}
+                          <button className="topicPopoverPrimary" type="button" disabled={!selectedConnection?.available || connectionLoading} onClick={() => selectedConnection && void startTopicConnection(selectedTopic.id, selectedConnection.edge.id)}>{connectionLoading ? copy.topic.connectionPreparing : copy.topic.connectionPractice}</button>
+                        </>
+                      ) : <div className="topicPopoverEmpty">{copy.topic.connectionNoEdges}</div>}
+                    </div>
                     {selectedClosureStatus ? (
                       <div className="topicPopoverSection topicPopoverClosure">
                         <div className="topicPopoverLabel">{copy.topic.closure}</div>
@@ -1795,6 +1858,17 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
         error={reviewError}
         close={closeReviewModal}
         rate={(rating) => void submitTopicReview(rating)}
+      />
+      <TopicConnectionDialog
+        prompt={connectionPrompt}
+        topicTitles={connectionTopicTitles}
+        modalRef={connectionModalRef}
+        copy={copy}
+        answer={connectionAnswer}
+        setAnswer={setConnectionAnswer}
+        revealed={connectionRevealed}
+        reveal={() => setConnectionRevealed(true)}
+        close={closeConnectionModal}
       />
     </>
   );

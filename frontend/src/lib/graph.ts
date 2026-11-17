@@ -1,5 +1,6 @@
 import type {
   ChatMessage,
+  Edge,
   GraphEnvelope,
   GraphOperation,
   ProposalGenerateResponse,
@@ -84,6 +85,22 @@ export function recommendStudyNext(graph: GraphEnvelope | null, nowMs: number): 
   const newTopic = ready.find((topic) => topic.state === "not_started");
   if (newTopic) return { topic: newTopic, reason: "ready_to_start" };
   return scheduled.length ? { topic: scheduled[0].topic, reason: "early_review" } : null;
+}
+
+export type TopicConnectionChoice = { edge: Edge; other: Topic; available: boolean };
+
+export function getTopicConnectionChoices(graph: GraphEnvelope | null, topicId: string | null): TopicConnectionChoice[] {
+  if (!graph || !topicId) return [];
+  const topicsById = new Map(graph.topics.map((topic) => [topic.id, topic]));
+  const selected = topicsById.get(topicId);
+  if (!selected) return [];
+  return graph.edges.flatMap((edge) => {
+    if (edge.source_topic_id === edge.target_topic_id ||
+        (edge.source_topic_id !== topicId && edge.target_topic_id !== topicId)) return [];
+    const otherId = edge.source_topic_id === topicId ? edge.target_topic_id : edge.source_topic_id;
+    const other = topicsById.get(otherId);
+    return other ? [{ edge, other, available: Boolean(selected.description.trim() && other.description.trim()) }] : [];
+  });
 }
 
 export function computeGraphSummary(graph: GraphEnvelope | null): {
