@@ -161,6 +161,12 @@ export type InlineChatQuiz = {
   status?: "pending" | "answered" | "interrupted";
 };
 
+export type StudyVisualCard =
+  | { kind: "flow"; title: string; takeaway: string; steps: { label: string; detail: string }[] }
+  | { kind: "coordinates"; title: string; takeaway: string; x_min: number; x_max: number; y_min: number; y_max: number;
+      points: { id: string; label: string; x: number; y: number }[];
+      segments: { source_id: string; target_id: string; directed: boolean }[] };
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -180,6 +186,7 @@ export type ChatMessage = {
   question?: AgentQuestion | null;
   closure_quiz?: TopicQuizSession | null;
   graph_path?: { topic_id: string; topic_title: string } | null;
+  study_visual?: StudyVisualCard | null;
   activity?: { id: string; tool: string; status: "running" | "completed" | "failed"; detail: string } | null;
   agent_status?: "streaming" | "completed" | "interrupted" | "failed" | null;
 };

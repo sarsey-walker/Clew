@@ -12,6 +12,7 @@ The center is simple: **a thread through anything you're learning**. Everything 
 - `Graph-first workspace`: topics, dependencies, zones, resources, artifacts, layout, and progress live on the main surface.
 - `Path reading`: click a topic and see what surrounds it: foundations, blockers, frontier, related branches, and what can wait.
 - `Study closure`: use closure quizzes for stricter learning or mark topics finished manually when the workspace should stay lightweight.
+- `Study visuals`: the assistant can show short process flows and equal-scale coordinate figures beside its explanation, without changing the graph.
 
 ## Interface
 

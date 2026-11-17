@@ -129,6 +129,39 @@
   overflow: hidden;
 }
 
+.studyVisualCard {
+  min-width: 0;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-block);
+  background: var(--ui-fill-1);
+  overflow: hidden;
+}
+
+.studyVisualHeader { display: grid; gap: 4px; padding: 13px 14px; border-bottom: 1px solid var(--ui-line); }
+.studyVisualHeader strong { font-size: var(--ui-text-md); line-height: 1.35; }
+.studyVisualKind { color: var(--ui-fg-3); font: 600 10px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.studyFlowSteps { list-style: none; display: grid; gap: 0; margin: 0; padding: 12px 14px; }
+.studyFlowSteps li { position: relative; display: flex; align-items: flex-start; gap: 10px; min-width: 0; padding: 5px 0 15px; }
+.studyFlowSteps li:last-child { padding-bottom: 5px; }
+.studyFlowSteps li:not(:last-child)::after { content: "↓"; position: absolute; left: 7px; bottom: -3px; color: var(--ui-fg-3); font-size: 13px; }
+.studyFlowIndex { flex: 0 0 19px; display: grid; place-items: center; height: 19px; border: 1px solid var(--ui-line-strong); border-radius: 50%; color: var(--ui-fg-2); font: 600 10px/1 var(--mono); }
+.studyFlowSteps li div { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.studyFlowSteps li strong { font-size: var(--ui-text-sm); line-height: 1.4; }
+.studyFlowSteps li div span { color: var(--ui-fg-2); font-size: var(--ui-text-sm); line-height: 1.4; }
+.studyCoordinateScroll { overflow-x: auto; padding: 10px 10px 0; }
+.studyCoordinatePlane { display: block; width: 100%; min-width: 310px; color: var(--ui-fg-2); }
+.studyCoordinateGrid { stroke: var(--ui-line); stroke-width: 1; }
+.studyCoordinateFrame { fill: none; stroke: var(--ui-line-strong); stroke-width: 1; }
+.studyCoordinateAxis { stroke: var(--ui-fg-3); stroke-width: 1.2; }
+.studyCoordinateSegment { stroke: var(--ui-fg); stroke-width: 2; }
+.studyCoordinatePoint { fill: var(--ui-primary); stroke: var(--ui-surface); stroke-width: 1.5; }
+.studyCoordinatePointLabel { fill: var(--ui-fg); font: 600 11px/1 var(--mono); }
+.studyCoordinateBound { fill: var(--ui-fg-3); font: 10px/1 var(--mono); }
+.studyCoordinateLegend { display: grid; gap: 4px; margin: 0; padding: 8px 14px 12px; list-style: none; border-top: 1px solid var(--ui-line); font-size: var(--ui-text-xs); }
+.studyCoordinateLegend li { display: flex; gap: 5px; align-items: baseline; overflow-wrap: anywhere; }
+.studyCoordinateLegend li span { margin-left: auto; color: var(--ui-fg-3); font-family: var(--mono); white-space: nowrap; }
+.studyVisualTakeaway { margin: 0; padding: 10px 14px; border-top: 1px solid var(--ui-line); color: var(--ui-fg-2); font-size: var(--ui-text-sm); line-height: 1.45; }
+
 .chatStopped {
   font-size: var(--ui-text-xs);
   color: var(--ui-fg-3);

@@ -378,6 +378,37 @@ class GraphPathCard(BaseModel):
     topic_title: str
 
 
+class StudyFlowStep(BaseModel):
+    label: str
+    detail: str = ""
+
+
+class StudyCoordinatePoint(BaseModel):
+    id: str
+    label: str
+    x: float
+    y: float
+
+
+class StudyCoordinateSegment(BaseModel):
+    source_id: str
+    target_id: str
+    directed: bool = False
+
+
+class StudyVisualCard(BaseModel):
+    kind: Literal["flow", "coordinates"]
+    title: str
+    takeaway: str = ""
+    steps: list[StudyFlowStep] = Field(default_factory=list)
+    x_min: float | None = None
+    x_max: float | None = None
+    y_min: float | None = None
+    y_max: float | None = None
+    points: list[StudyCoordinatePoint] = Field(default_factory=list)
+    segments: list[StudyCoordinateSegment] = Field(default_factory=list)
+
+
 class ChatMessage(BaseModel):
     id: str | None = None
     role: ChatRole
@@ -397,6 +428,7 @@ class ChatMessage(BaseModel):
     question: AgentQuestion | None = None
     closure_quiz: TopicQuizSessionPublic | None = None
     graph_path: GraphPathCard | None = None
+    study_visual: StudyVisualCard | None = None
     activity: AgentActivity | None = None
     agent_status: Literal["streaming", "completed", "interrupted", "failed"] | None = None
 

@@ -4,8 +4,8 @@ import json
 from typing import TYPE_CHECKING
 
 from app.agent.context import graph_context
-from app.agent.contracts import CLOSURE_QUIZ_TOOLS, CONNECTION_PROMPT_TOOLS, REVIEW_PROMPT_TOOLS, TOOL_MODELS, ClosureQuizDraft, ConnectionPromptDraft, GraphPathDraft, InlineQuizDraft, ProposalDraft, QuestionDraft, ReviewPromptDraft
-from app.models.domain import AgentActivity, AgentQuestion, ChatMessage, GraphPathCard, InlineChatQuiz, QuizQuestion, TopicQuizSessionPublic
+from app.agent.contracts import CLOSURE_QUIZ_TOOLS, CONNECTION_PROMPT_TOOLS, REVIEW_PROMPT_TOOLS, TOOL_MODELS, ClosureQuizDraft, ConnectionPromptDraft, CoordinateVisualDraft, FlowVisualDraft, GraphPathDraft, InlineQuizDraft, ProposalDraft, QuestionDraft, ReviewPromptDraft
+from app.models.domain import AgentActivity, AgentQuestion, ChatMessage, GraphPathCard, InlineChatQuiz, QuizQuestion, StudyVisualCard, TopicQuizSessionPublic
 from app.services.proposal_service import ProposalService
 from app.services.quiz_service import QuizService
 
@@ -21,6 +21,8 @@ LABELS = {
     "ask_question": "Waiting for your answer",
     "present_quiz": "Waiting for your answer",
     "show_graph_path": "Showing a graph path",
+    "show_flow_visual": "Preparing a study visual",
+    "show_coordinate_visual": "Preparing a study visual",
     "create_closure_quiz": "Preparing your test",
     "present_review_prompt": "Preparing your review question",
     "present_connection_prompt": "Preparing a connection question",
@@ -110,6 +112,14 @@ async def execute_tool(runtime: AgentRuntime, run: AgentRun, tool: str, call_id:
             message.graph_path = GraphPathCard(topic_id=topic.id, topic_title=topic.title)
             result = {"status": "ready", "topic_id": topic.id,
                       "message": "The path card is visible in Clew. The learner opens it when ready."}
+        elif tool == "show_flow_visual":
+            assert isinstance(parsed, FlowVisualDraft)
+            message.study_visual = StudyVisualCard(kind="flow", **parsed.model_dump())
+            result = {"status": "ready", "message": "The flow visual is visible in Clew."}
+        elif tool == "show_coordinate_visual":
+            assert isinstance(parsed, CoordinateVisualDraft)
+            message.study_visual = StudyVisualCard(kind="coordinates", **parsed.model_dump())
+            result = {"status": "ready", "message": "The coordinate visual is visible in Clew."}
         elif tool in {"propose_ingest", "propose_expand"}:
             assert isinstance(parsed, ProposalDraft)
             proposal = ProposalService().prepare(graph, parsed, tool=tool, proposal_id=f"prop-{call_id}",

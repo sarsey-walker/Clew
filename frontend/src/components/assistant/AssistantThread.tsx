@@ -8,6 +8,7 @@ import { summarizePreviewCounts, summarizeTopOperations } from "../../lib/graph"
 import { AgentInteraction, type AgentControls } from "./AgentInteraction";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 import { ClewLoader } from "../ClewLoader";
+import { StudyVisual } from "./StudyVisual";
 import { groupChatReplies, presentChatReply } from "../../lib/chatPresentation";
 
 type AssistantMessage = GraphChatState["messages"][number];
@@ -106,6 +107,7 @@ export function AssistantThread({
                     <button className="proposalOpenButton" type="button" onClick={() => agentControls.openGraphPath(message.graph_path!.topic_id)}>{copy.sessions.openGraphPath}</button>
                   </div>
                 </div> : null}
+                {message.study_visual ? <StudyVisual visual={message.study_visual} /> : null}
                 {message.planning_status ? (
                   <AssistantProgress label={message.planning_status} />
                 ) : null}

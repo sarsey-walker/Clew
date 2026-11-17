@@ -77,6 +77,29 @@ describe("nested assistant reply", () => {
     expect(html).toContain("Show in graph");
   });
 
+  it("renders bounded flow and coordinate visuals inline with accessible labels", () => {
+    const html = render([
+      part("flow", { study_visual: { kind: "flow", title: "How a function works", takeaway: "The output follows the rule.",
+        steps: [{ label: "Input", detail: "Choose x" }, { label: "Rule", detail: "Apply f" }, { label: "Output", detail: "Get y" }] } }),
+      part("plot", { study_visual: { kind: "coordinates", title: "A vector", takeaway: "", x_min: -1, x_max: 3, y_min: -1, y_max: 4,
+        points: [{ id: "O", label: "Origin", x: 0, y: 0 }, { id: "A", label: "Endpoint", x: 2, y: 3 }],
+        segments: [{ source_id: "O", target_id: "A", directed: true }] } }),
+    ]);
+    expect(html).toContain("How a function works");
+    expect(html).toContain("studyFlowSteps");
+    expect(html).toContain('role="img"');
+    expect(html).toContain("Origin: (0, 0)");
+    expect(html).toContain("marker-end");
+  });
+
+  it("does not draw a false zero axis when the coordinate bounds exclude zero", () => {
+    const html = render([part("plot", { study_visual: { kind: "coordinates", title: "Positive quadrant", takeaway: "",
+      x_min: 1, x_max: 3, y_min: 1, y_max: 3,
+      points: [{ id: "P", label: "Positive point", x: 2, y: 2 }], segments: [] } })]);
+    expect(html).not.toContain('class="studyCoordinateAxis"');
+    expect(html).toContain("Positive point: (2, 2)");
+  });
+
   it("keeps the same three-dot indicator before output, during text and during tools", () => {
     for (const [messages, status, runId] of [
       [[], "starting", null],

@@ -64,7 +64,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request["model"], "test-model")
         self.assertNotIn("reasoning", request)
         self.assertEqual({tool["name"] for tool in request["tools"] if tool["type"] == "function"},
-                         {"read_graph", "read_topic", "propose_ingest", "propose_expand", "ask_question", "present_quiz", "show_graph_path", "create_closure_quiz"})
+                         {"read_graph", "read_topic", "propose_ingest", "propose_expand", "ask_question", "present_quiz", "show_graph_path", "show_flow_visual", "show_coordinate_visual", "create_closure_quiz"})
         # Web search is always offered in chat; the model decides whether to use it.
         self.assertIn({"type": "web_search"}, request["tools"])
 
@@ -143,6 +143,20 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         card = next((message.graph_path for message in thread.messages if message.graph_path), None)
         self.assertIsNotNone(card)
         self.assertEqual(card.topic_id, "algebra-basics")
+        self.assertEqual(self.repo.current().snapshot.id, before)
+
+    async def test_study_visual_cards_persist_without_changing_the_graph(self):
+        before = self.repo.current().snapshot.id
+        for scenario, kind in (("flow-visual", "flow"), ("coordinate-visual", "coordinates")):
+            with self.subTest(scenario=scenario):
+                session = self.repo.create_chat_session(self.graph_id)
+                sid, run = await self.start(scenario, session_id=session.session_id)
+                await self.complete(run)
+                thread = self.repo.chat_thread(self.graph_id, sid)
+                card = next((message.study_visual for message in thread.messages if message.study_visual), None)
+                self.assertIsNotNone(card)
+                self.assertEqual(card.kind, kind)
+                self.assertEqual(self.runtime.store.thread_payload(self.graph_id, sid)["messages"][1]["study_visual"]["kind"], kind)
         self.assertEqual(self.repo.current().snapshot.id, before)
 
     async def test_proposal_tool_does_not_mutate_graph(self):

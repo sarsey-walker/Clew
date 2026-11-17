@@ -1,6 +1,6 @@
 import unittest
 from uuid import uuid4
-from app.agent.contracts import ProposalDraft, tool_specs
+from app.agent.contracts import CoordinateVisualDraft, FlowVisualDraft, ProposalDraft, tool_specs
 from app.models.domain import ChatMessage, CreateGraphRequest, Edge, GraphProposal, GraphProposalEnvelope, StudyGraph, Topic, UpdateWorkspaceConfigRequest
 from app.services.proposal_normalizer import ProposalNormalizer
 from app.services.proposal_service import ProposalService
@@ -125,8 +125,22 @@ class ProposalToolTests(unittest.TestCase):
         self.assertEqual({tool["type"] for tool in specs}, {"function"})
         self.assertTrue(all("parameters" in tool for tool in specs))
         names = {tool["name"] for tool in specs}
-        self.assertEqual(names, {"read_graph", "read_topic", "propose_ingest", "propose_expand", "ask_question", "present_quiz", "show_graph_path", "create_closure_quiz"})
+        self.assertEqual(names, {"read_graph", "read_topic", "propose_ingest", "propose_expand", "ask_question", "present_quiz", "show_graph_path", "show_flow_visual", "show_coordinate_visual", "create_closure_quiz"})
         self.assertNotIn("answer", names)
+
+    def test_visual_contracts_reject_unrenderable_or_unbounded_cards(self):
+        with self.assertRaises(ValueError):
+            FlowVisualDraft.model_validate({"title": "Too short", "steps": [{"label": "Only one"}]})
+        base = {"title": "Plot", "x_min": -1, "x_max": 2, "y_min": -1, "y_max": 2,
+                "points": [{"id": "A", "label": "A", "x": 1, "y": 1}]}
+        for patch in ({"x_max": -1}, {"x_max": 100},
+                      {"points": [{"id": "A", "label": "Outside", "x": 3, "y": 1}]},
+                      {"segments": [{"source_id": "A", "target_id": "missing"}]},
+                      {"points": [{"id": "A", "label": "A", "x": 1, "y": 1},
+                                  {"id": "B", "label": "B", "x": 1, "y": 1}],
+                       "segments": [{"source_id": "A", "target_id": "B"}]}):
+            with self.subTest(patch=patch), self.assertRaises(ValueError):
+                CoordinateVisualDraft.model_validate({**base, **patch})
 
     def test_edge_replacement_validates_the_final_topology(self):
         graph = StudyGraph(graph_id="chain", subject="test", title="Chain",

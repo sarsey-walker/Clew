@@ -56,6 +56,8 @@ Tools are supplied as Responses API function tools on every request (`parallel_t
 | `ask_question` | Show a persistent choice or free-text card and complete the reply |
 | `present_quiz` | Show a persistent four-choice checkpoint; grade its answer on the server |
 | `show_graph_path` | Show a card that selects a real topic and highlights its prerequisite path in the graph |
+| `show_flow_visual` | Show a bounded ordered process or derivation card in chat |
+| `show_coordinate_visual` | Show validated points, segments and vectors on a coordinate plane in chat |
 | `create_closure_quiz` | Validate and register a full completion test; never award progress directly |
 | `present_review_prompt` | Supply a recall question and reference answer for the selected topic's review dialog |
 | `present_connection_prompt` | Supply a question and reference answer connecting two topics on a selected graph edge |
@@ -71,6 +73,8 @@ A review snapshot also keeps the learner's question, answer, reference and self-
 The Diagnose understanding action creates a topic-bound chat session with a visible session title and a hidden, explicit diagnostic request. The selected model uses the existing interactive checkpoint tool to probe one question at a time, adapting to each server-graded answer and ending with a study summary. The request asks for at most six checkpoints; it does not award completion or mutate the graph. Checkpoint contracts require a short explanation and direct the model to write plausible, parallel alternatives.
 
 For structural explanations, `show_graph_path` can place a card in the chat that opens a validated topic in the existing graph view. It uses Clew's actual prerequisite edges and creates no visual file or graph change.
+
+For processes and spatial explanations beyond the graph, the selected model may author a short flow or coordinate card. Typed contracts bound the number of steps and points and reject invalid coordinates or segment references. Clew renders these cards inline from structured data, persists them with the chat transcript, and never treats them as graph operations. The model remains responsible for factual correctness of the explanation.
 
 The topic connection action is available for existing graph edges. Its ephemeral turn exposes only `read_topic` and `present_connection_prompt`; the model must read both endpoints. Clew checks the edge id, graph version and endpoints before showing the question. The learner's comparison is a practice action and does not award progress or write a snapshot.
 

@@ -198,6 +198,21 @@ class FakeChatGPT:
             return self._complete([], [self._call("present_quiz", {"question": "What is 2 + 2?", "choices": ["3", "4", "5", "6"], "correct_index": 1, "explanation": "Adding two groups of two gives four."})])
         if scenario == "graph-path":
             return self._complete([], [self._call("show_graph_path", {"topic_id": "algebra-basics"})])
+        if scenario == "flow-visual":
+            return self._complete([], [self._call("show_flow_visual", {
+                "title": "From input to output",
+                "steps": [{"label": "Input", "detail": "Choose a number."},
+                          {"label": "Transform", "detail": "Double it."},
+                          {"label": "Output", "detail": "Read the result."}],
+                "takeaway": "The output depends on the input.",
+            })])
+        if scenario == "coordinate-visual":
+            return self._complete([], [self._call("show_coordinate_visual", {
+                "title": "A vector in the plane", "x_min": -1, "x_max": 3, "y_min": -1, "y_max": 4,
+                "points": [{"id": "O", "label": "Origin", "x": 0, "y": 0},
+                           {"id": "A", "label": "Endpoint", "x": 2, "y": 3}],
+                "segments": [{"source_id": "O", "target_id": "A", "directed": True}],
+            })])
         if scenario == "review":
             return self._complete([], [self._call("read_topic", {"topic_id": context["selected_topic_id"]})])
         if scenario == "review-no-tool":

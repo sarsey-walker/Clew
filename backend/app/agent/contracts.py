@@ -134,6 +134,62 @@ class GraphPathDraft(ToolInput):
     topic_id: str = Field(min_length=1)
 
 
+class FlowStepDraft(ToolInput):
+    label: str = Field(min_length=1, max_length=70)
+    detail: str = Field(default="", max_length=180)
+
+
+class FlowVisualDraft(ToolInput):
+    title: str = Field(min_length=1, max_length=100)
+    steps: list[FlowStepDraft] = Field(min_length=2, max_length=6)
+    takeaway: str = Field(default="", max_length=240)
+
+
+class CoordinatePointDraft(ToolInput):
+    id: str = Field(min_length=1, max_length=12, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")
+    label: str = Field(min_length=1, max_length=50)
+    x: float = Field(ge=-1000, le=1000, allow_inf_nan=False)
+    y: float = Field(ge=-1000, le=1000, allow_inf_nan=False)
+
+
+class CoordinateSegmentDraft(ToolInput):
+    source_id: str = Field(min_length=1)
+    target_id: str = Field(min_length=1)
+    directed: bool = False
+
+
+class CoordinateVisualDraft(ToolInput):
+    title: str = Field(min_length=1, max_length=100)
+    x_min: float = Field(ge=-1000, le=1000, allow_inf_nan=False)
+    x_max: float = Field(ge=-1000, le=1000, allow_inf_nan=False)
+    y_min: float = Field(ge=-1000, le=1000, allow_inf_nan=False)
+    y_max: float = Field(ge=-1000, le=1000, allow_inf_nan=False)
+    points: list[CoordinatePointDraft] = Field(min_length=1, max_length=6)
+    segments: list[CoordinateSegmentDraft] = Field(default_factory=list, max_length=8)
+    takeaway: str = Field(default="", max_length=240)
+
+    @model_validator(mode="after")
+    def valid_geometry(self) -> "CoordinateVisualDraft":
+        width, height = self.x_max - self.x_min, self.y_max - self.y_min
+        if width < 1e-6 or height < 1e-6:
+            raise ValueError("Coordinate bounds must have a positive width and height.")
+        if max(width / height, height / width) > 6:
+            raise ValueError("Coordinate bounds are too narrow for a readable equal-scale plot.")
+        ids = {point.id for point in self.points}
+        if len(ids) != len(self.points):
+            raise ValueError("Coordinate point IDs must be unique.")
+        if any(not (self.x_min <= point.x <= self.x_max and self.y_min <= point.y <= self.y_max) for point in self.points):
+            raise ValueError("Every coordinate point must lie inside the displayed bounds.")
+        points_by_id = {point.id: point for point in self.points}
+        for segment in self.segments:
+            if segment.source_id not in ids or segment.target_id not in ids:
+                raise ValueError("Every segment must connect displayed points.")
+            start, end = points_by_id[segment.source_id], points_by_id[segment.target_id]
+            if start.id == end.id or (start.x, start.y) == (end.x, end.y):
+                raise ValueError("Every segment must connect two distinct displayed positions.")
+        return self
+
+
 class ClosureQuizDraft(QuizQuestionSetDraft):
     model_config = {"extra": "forbid"}
     topic_id: str
@@ -157,6 +213,8 @@ TOOL_MODELS = {
     "ask_question": QuestionDraft,
     "present_quiz": InlineQuizDraft,
     "show_graph_path": GraphPathDraft,
+    "show_flow_visual": FlowVisualDraft,
+    "show_coordinate_visual": CoordinateVisualDraft,
     "create_closure_quiz": ClosureQuizDraft,
     "present_review_prompt": ReviewPromptDraft,
     "present_connection_prompt": ConnectionPromptDraft,
@@ -176,6 +234,8 @@ def tool_specs(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
         "ask_question": "Show a focused question, optionally with choices and free-text replies. Ends this reply; the learner's answer arrives from Clew in a new turn.",
         "present_quiz": "Show one multiple-choice learning checkpoint with exactly four distinct choices and a concise explanation. Use plausible misconceptions as distractors, with parallel wording and no answer-revealing cues. Ends this reply; Clew sends the server-graded answer in a new turn. Does not award topic completion.",
         "show_graph_path": "Show a card that opens an existing topic and highlights its prerequisite path in the learner's graph. Use when the relationship or dependency is clearer in the graph. This does not change the graph.",
+        "show_flow_visual": "Show a compact, ordered flow of 2–6 steps for a process or derivation that is clearer with direction. Keep each step short and factually grounded. This is a study card, not a graph edit.",
+        "show_coordinate_visual": "Show a bounded coordinate plane with 1–6 labeled points and optional segments (directed for vectors). Use for geometry, vectors or spatial reasoning when exact coordinates matter. Supply correct coordinates and visible bounds. This is a study card, not a graph edit.",
         "create_closure_quiz": "Register a complete closure quiz for a topic. Supply the requested number of questions with four distinct choices each. Clew checks prerequisites and grades the learner's answers itself.",
         "present_review_prompt": "Prepare one open recall question for the requested topic and a concise reference answer. Clew validates and shows both in the topic review dialog; this does not change graph progress.",
         "present_connection_prompt": "Prepare one open question that makes the learner connect the two topics on the requested graph edge, plus a concise reference answer. Clew validates and shows both without changing graph progress.",
